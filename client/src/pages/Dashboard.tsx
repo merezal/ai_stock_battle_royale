@@ -5,6 +5,7 @@ import {
   getOrderBook,
   getCompanies,
   getTransactions,
+  getPortfolioHistory,
   placeBid,
   placeAsk,
   fulfillBid,
@@ -14,6 +15,7 @@ import {
 } from '../api/client';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { UserLink } from '../components/UserLink';
+import { PortfolioChart } from '../components/PortfolioChart';
 import { Link } from 'react-router-dom';
 
 export function Dashboard() {
@@ -50,6 +52,13 @@ export function Dashboard() {
     refetchInterval: 10000,
   });
 
+  const { data: portfolioHistory } = useQuery({
+    queryKey: ['portfolioHistory', user?.username],
+    queryFn: () => getPortfolioHistory(user!.username),
+    enabled: user?.username !== undefined,
+    refetchInterval: 30000,
+  });
+
   const placeBidMutation = useMutation({
     mutationFn: () => placeBid(userId!, selectedTicker, parseInt(shares), parseFloat(price)),
     onSuccess: () => {
@@ -84,6 +93,7 @@ export function Dashboard() {
       queryClient.invalidateQueries({ queryKey: ['user'] });
       queryClient.invalidateQueries({ queryKey: ['companies'] });
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['portfolioHistory'] });
     },
     onError: (err: Error) => setError(err.message),
   });
@@ -96,6 +106,7 @@ export function Dashboard() {
       queryClient.invalidateQueries({ queryKey: ['user'] });
       queryClient.invalidateQueries({ queryKey: ['companies'] });
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['portfolioHistory'] });
     },
     onError: (err: Error) => setError(err.message),
   });
@@ -162,10 +173,16 @@ export function Dashboard() {
         Welcome back, <span className="text-green-400">{portfolio?.username}</span>
       </h1>
 
+      {/* Portfolio Value Chart */}
+      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+        <h2 className="text-xl font-semibold text-white mb-4">Portfolio Performance</h2>
+        <PortfolioChart history={portfolioHistory || []} />
+      </div>
+
       {/* User Portfolio */}
       {portfolio && (
         <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-          <h2 className="text-xl font-semibold text-white mb-4">Your Portfolio</h2>
+          <h2 className="text-xl font-semibold text-white mb-4">Current Holdings</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <div>
               <p className="text-gray-400 text-sm">Total Value</p>

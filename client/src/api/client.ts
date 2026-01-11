@@ -47,6 +47,10 @@ export async function getPortfolioByUsername(username: string): Promise<Portfoli
   return fetchJSON(`${API_BASE}/users/by-username/${encodeURIComponent(username)}/portfolio`);
 }
 
+export async function getPortfolioHistory(username: string): Promise<{ timestamp: string; value: number }[]> {
+  return fetchJSON(`${API_BASE}/users/by-username/${encodeURIComponent(username)}/portfolio-history`);
+}
+
 export async function getLeaderboard(): Promise<LeaderboardEntry[]> {
   return fetchJSON(`${API_BASE}/users`);
 }
@@ -193,4 +197,85 @@ export async function deletePost(postId: number, userId: number): Promise<void> 
   return fetchJSON(`${API_BASE}/posts/${postId}?userId=${userId}`, {
     method: 'DELETE',
   });
+}
+
+// Bot
+export interface BotPrompt {
+  promptId: number | null;
+  promptText: string;
+  isActive: boolean;
+  version: number;
+  lastModified?: string;
+}
+
+export interface BotActivityLog {
+  logId: number;
+  actionType: string;
+  actionDetails: Record<string, unknown>;
+  result: Record<string, unknown>;
+  timestamp: string;
+}
+
+export interface BotTool {
+  name: string;
+  description: string;
+}
+
+export async function getBotPrompt(userId: number): Promise<BotPrompt> {
+  return fetchJSON(`${API_BASE}/bot/prompt/${userId}`);
+}
+
+export async function saveBotPrompt(
+  userId: number,
+  promptText: string
+): Promise<{ success: boolean; promptId: number; version: number }> {
+  return fetchJSON(`${API_BASE}/bot/prompt`, {
+    method: 'POST',
+    body: JSON.stringify({ userId, promptText }),
+  });
+}
+
+export async function toggleBot(
+  userId: number,
+  isActive: boolean
+): Promise<{ success: boolean; isActive: boolean }> {
+  return fetchJSON(`${API_BASE}/bot/toggle`, {
+    method: 'POST',
+    body: JSON.stringify({ userId, isActive }),
+  });
+}
+
+export async function runBotOnce(userId: number): Promise<{
+  success?: boolean;
+  error?: string;
+  toolCallCount?: number;
+  executionLog?: Array<{ action: string; result: unknown }>;
+}> {
+  return fetchJSON(`${API_BASE}/bot/run-once`, {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  });
+}
+
+export async function getBotLogs(userId: number, limit = 50): Promise<BotActivityLog[]> {
+  return fetchJSON(`${API_BASE}/bot/logs/${userId}?limit=${limit}`);
+}
+
+export async function getBotTools(): Promise<BotTool[]> {
+  return fetchJSON(`${API_BASE}/bot/tools`);
+}
+
+export interface BotStatus {
+  loopRunning: boolean;
+  activeBotsCount: number;
+  executionInterval: number;
+  currentBot: { userId: number; username: string } | null;
+  queue: Array<{ userId: number; username: string }>;
+  lastCycleStart: string | null;
+  lastCycleEnd: string | null;
+  isExecuting: boolean;
+}
+
+export async function getBotStatus(): Promise<BotStatus> {
+  return fetchJSON(`${API_BASE}/bot/admin/status`);
 }

@@ -7,6 +7,7 @@ import usersRouter from './routes/users';
 import companiesRouter from './routes/companies';
 import tradingRouter from './routes/trading';
 import postsRouter from './routes/posts';
+import botRouter from './routes/bot';
 
 const app = express();
 
@@ -21,6 +22,7 @@ app.use('/api/users', usersRouter);
 app.use('/api/companies', companiesRouter);
 app.use('/api/trading', tradingRouter);
 app.use('/api/posts', postsRouter);
+app.use('/api/bot', botRouter);
 
 // Health check
 app.get('/health', (_req, res) => {

@@ -8,6 +8,7 @@ import { Companies } from './pages/Companies';
 import { CompanyDetail } from './pages/CompanyDetail';
 import { UserProfile } from './pages/UserProfile';
 import { Posts } from './pages/Posts';
+import { Bot } from './pages/Bot';
 import { Login } from './pages/Login';
 
 const queryClient = new QueryClient({
@@ -32,6 +33,7 @@ function App() {
               <Route path="companies/:ticker" element={<CompanyDetail />} />
               <Route path="users/:username" element={<UserProfile />} />
               <Route path="posts" element={<Posts />} />
+              <Route path="bot" element={<Bot />} />
               <Route path="login" element={<Login />} />
             </Route>
           </Routes>

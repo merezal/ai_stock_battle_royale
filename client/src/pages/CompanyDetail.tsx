@@ -2,6 +2,7 @@ import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { getCompany, getOrderBook, getTransactions } from '../api/client';
 import { UserLink } from '../components/UserLink';
+import { PriceChart } from '../components/PriceChart';
 
 export function CompanyDetail() {
   const { ticker } = useParams<{ ticker: string }>();
@@ -84,6 +85,15 @@ export function CompanyDetail() {
             </p>
           </div>
         </div>
+      </div>
+
+      {/* Price Chart */}
+      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+        <h2 className="text-xl font-semibold text-white mb-4">Price History</h2>
+        <PriceChart
+          transactions={transactions || []}
+          currentPrice={company.currentPrice}
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

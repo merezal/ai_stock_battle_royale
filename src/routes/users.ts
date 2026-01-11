@@ -280,4 +280,122 @@ router.get('/', async (_req: Request, res: Response) => {
   }
 });
 
+// Get portfolio value history for a user
+router.get('/by-username/:username/portfolio-history', async (req: Request<{ username: string }>, res: Response) => {
+  try {
+    const { username } = req.params;
+
+    const user = await prisma.user.findUnique({
+      where: { username },
+      include: {
+        account: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Get all transactions involving this user
+    const transactions = await prisma.transaction.findMany({
+      where: {
+        OR: [
+          { buyerId: user.id },
+          { sellerId: user.id },
+        ],
+      },
+      include: {
+        company: true,
+      },
+      orderBy: { timestamp: 'asc' },
+    });
+
+    // Starting cash is 100000, simulate portfolio value over time
+    const startingCash = 100000;
+    let cash = startingCash;
+    const holdings: Record<number, { shares: number; companyId: number }> = {};
+
+    // Track the price of each stock at each transaction
+    const stockPrices: Record<number, number> = {};
+
+    const history: { timestamp: string; value: number }[] = [
+      { timestamp: user.createdAt.toISOString(), value: startingCash },
+    ];
+
+    for (const tx of transactions) {
+      const amount = Number(tx.totalAmount);
+      const shares = Number(tx.sharesTraded);
+      const companyId = tx.companyId;
+
+      // Update stock price
+      stockPrices[companyId] = Number(tx.pricePerShare);
+
+      if (tx.buyerId === user.id) {
+        // User bought shares
+        cash -= amount;
+        holdings[companyId] = holdings[companyId] || { shares: 0, companyId };
+        holdings[companyId].shares += shares;
+      } else {
+        // User sold shares
+        cash += amount;
+        holdings[companyId] = holdings[companyId] || { shares: 0, companyId };
+        holdings[companyId].shares -= shares;
+      }
+
+      // Calculate total portfolio value at this point
+      let stockValue = 0;
+      for (const h of Object.values(holdings)) {
+        const price = stockPrices[h.companyId] || 0;
+        stockValue += h.shares * price;
+      }
+
+      history.push({
+        timestamp: tx.timestamp.toISOString(),
+        value: cash + stockValue,
+      });
+    }
+
+    // Add current value as final point
+    const currentUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      include: {
+        account: true,
+        stockHoldings: {
+          include: {
+            company: {
+              include: {
+                transactions: {
+                  orderBy: { timestamp: 'desc' },
+                  take: 1,
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (currentUser && currentUser.account) {
+      let currentStockValue = 0;
+      for (const h of currentUser.stockHoldings) {
+        const lastTx = h.company.transactions[0];
+        const price = lastTx
+          ? Number(lastTx.pricePerShare)
+          : Number(h.company.foundingCost) / Number(h.company.totalSharesIssued);
+        currentStockValue += Number(h.sharesOwned) * price;
+      }
+
+      history.push({
+        timestamp: new Date().toISOString(),
+        value: Number(currentUser.account.cashBalance) + currentStockValue,
+      });
+    }
+
+    return res.json(history);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: 'Failed to fetch portfolio history' });
+  }
+});
+
 export default router;

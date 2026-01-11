@@ -1,7 +1,8 @@
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { getPortfolioByUsername, getTransactions } from '../api/client';
+import { getPortfolioByUsername, getTransactions, getPortfolioHistory } from '../api/client';
 import { useCurrentUser } from '../hooks/useCurrentUser';
+import { PortfolioChart } from '../components/PortfolioChart';
 
 export function UserProfile() {
   const { username } = useParams<{ username: string }>();
@@ -16,6 +17,12 @@ export function UserProfile() {
   const { data: transactions } = useQuery({
     queryKey: ['transactions', username],
     queryFn: () => getTransactions(undefined, username, 10),
+    enabled: !!username,
+  });
+
+  const { data: portfolioHistory } = useQuery({
+    queryKey: ['portfolioHistory', username],
+    queryFn: () => getPortfolioHistory(username!),
     enabled: !!username,
   });
 
@@ -61,9 +68,15 @@ export function UserProfile() {
         )}
       </div>
 
+      {/* Portfolio Value Chart */}
+      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+        <h2 className="text-xl font-semibold text-white mb-4">Portfolio Value Over Time</h2>
+        <PortfolioChart history={portfolioHistory || []} />
+      </div>
+
       {/* Portfolio Summary */}
       <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-        <h2 className="text-xl font-semibold text-white mb-4">Portfolio Summary</h2>
+        <h2 className="text-xl font-semibold text-white mb-4">Current Holdings</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <div>
             <p className="text-gray-400 text-sm">Total Value</p>

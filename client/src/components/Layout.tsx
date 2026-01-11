@@ -1,15 +1,24 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { useCurrentUser } from '../hooks/useCurrentUser';
+import { getBotStatus, type BotStatus } from '../api/client';
 
 export function Layout() {
   const location = useLocation();
   const { userId, user, setUserId } = useCurrentUser();
+
+  const { data: botStatus } = useQuery<BotStatus>({
+    queryKey: ['botStatus'],
+    queryFn: getBotStatus,
+    refetchInterval: 2000,
+  });
 
   const navItems = [
     { path: '/', label: 'Dashboard' },
     { path: '/leaderboard', label: 'Leaderboard' },
     { path: '/companies', label: 'Companies' },
     { path: '/posts', label: 'Posts' },
+    { path: '/bot', label: 'AI Bot' },
   ];
 
   return (
@@ -38,6 +47,22 @@ export function Layout() {
               </div>
             </div>
             <div className="flex items-center space-x-4">
+              {/* Bot execution indicator */}
+              {botStatus?.currentBot && (
+                <Link
+                  to="/bot"
+                  className="flex items-center space-x-2 bg-green-900/50 border border-green-700 rounded-full px-3 py-1"
+                >
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <span className="text-green-400 text-sm">
+                    Running: <span className="font-medium">{botStatus.currentBot.username}</span>
+                  </span>
+                  {botStatus.queue.length > 0 && (
+                    <span className="text-green-600 text-xs">+{botStatus.queue.length}</span>
+                  )}
+                </Link>
+              )}
+
               {userId ? (
                 <div className="flex items-center space-x-4">
                   <span className="text-gray-300">

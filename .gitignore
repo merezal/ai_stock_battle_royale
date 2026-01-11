@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+*.log
+.DS_Store
+postgres_docker/docker_volume/
+TODO.txt
+CLAUDE.md
+postgres_docker
