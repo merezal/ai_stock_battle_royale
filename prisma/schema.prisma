@@ -1,0 +1,187 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int      @id @default(autoincrement()) @map("user_id")
+  username  String   @unique @db.VarChar(50)
+  email     String   @unique @db.VarChar(255)
+  createdAt DateTime @default(now()) @map("created_at")
+  isActive  Boolean  @default(true) @map("is_active")
+
+  account        Account?
+  foundedCompanies Company[]    @relation("FoundedCompanies")
+  stockHoldings  StockHolding[]
+  bids           Bid[]
+  asks           Ask[]
+  buyTransactions  Transaction[] @relation("BuyerTransactions")
+  sellTransactions Transaction[] @relation("SellerTransactions")
+  llmPrompts     LlmPrompt[]
+  posts          Post[]
+  llmActivityLogs LlmActivityLog[]
+
+  @@map("users")
+}
+
+model Account {
+  id              Int      @id @default(autoincrement()) @map("account_id")
+  userId          Int      @unique @map("user_id")
+  cashBalance     Decimal  @default(100000.00) @map("cash_balance") @db.Decimal(15, 2)
+  reservedCash    Decimal  @default(0.00) @map("reserved_cash") @db.Decimal(15, 2)
+  totalAssetValue Decimal  @default(100000.00) @map("total_asset_value") @db.Decimal(15, 2)
+  lastUpdated     DateTime @default(now()) @map("last_updated")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("accounts")
+}
+
+model Company {
+  id               Int      @id @default(autoincrement()) @map("company_id")
+  tickerSymbol     String   @unique @map("ticker_symbol") @db.VarChar(10)
+  companyName      String   @map("company_name") @db.VarChar(255)
+  foundedByUserId  Int?     @unique @map("founded_by_user_id")
+  foundingCost     Decimal? @map("founding_cost") @db.Decimal(15, 2)
+  totalSharesIssued BigInt   @map("total_shares_issued")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  founder       User?          @relation("FoundedCompanies", fields: [foundedByUserId], references: [id], onDelete: SetNull)
+  stockHoldings StockHolding[]
+  bids          Bid[]
+  asks          Ask[]
+  transactions  Transaction[]
+  posts         Post[]
+
+  @@map("companies")
+}
+
+model StockHolding {
+  id             Int      @id @default(autoincrement()) @map("holding_id")
+  userId         Int      @map("user_id")
+  companyId      Int      @map("company_id")
+  sharesOwned    BigInt   @map("shares_owned")
+  reservedShares BigInt   @default(0) @map("reserved_shares")
+  lastUpdated    DateTime @default(now()) @map("last_updated")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, companyId])
+  @@map("stock_holdings")
+}
+
+enum OrderStatus {
+  open
+  fulfilled
+  cancelled
+}
+
+model Bid {
+  id              Int         @id @default(autoincrement()) @map("bid_id")
+  userId          Int         @map("user_id")
+  companyId       Int         @map("company_id")
+  sharesRequested BigInt      @map("shares_requested")
+  pricePerShare   Decimal     @map("price_per_share") @db.Decimal(15, 2)
+  totalCost       Decimal     @map("total_cost") @db.Decimal(15, 2)
+  status          OrderStatus @default(open)
+  createdAt       DateTime    @default(now()) @map("created_at")
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@map("bids")
+}
+
+model Ask {
+  id            Int         @id @default(autoincrement()) @map("ask_id")
+  userId        Int         @map("user_id")
+  companyId     Int         @map("company_id")
+  sharesOffered BigInt      @map("shares_offered")
+  pricePerShare Decimal     @map("price_per_share") @db.Decimal(15, 2)
+  status        OrderStatus @default(open)
+  createdAt     DateTime    @default(now()) @map("created_at")
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@map("asks")
+}
+
+enum TransactionType {
+  bid_fulfillment
+  ask_fulfillment
+}
+
+model Transaction {
+  id              Int              @id @default(autoincrement()) @map("transaction_id")
+  buyerId         Int              @map("buyer_id")
+  sellerId        Int              @map("seller_id")
+  companyId       Int              @map("company_id")
+  sharesTraded    BigInt           @map("shares_traded")
+  pricePerShare   Decimal          @map("price_per_share") @db.Decimal(15, 2)
+  totalAmount     Decimal          @map("total_amount") @db.Decimal(15, 2)
+  bidId           Int?             @map("bid_id")
+  askId           Int?             @map("ask_id")
+  timestamp       DateTime         @default(now())
+  transactionType TransactionType? @map("transaction_type")
+
+  buyer   User     @relation("BuyerTransactions", fields: [buyerId], references: [id], onDelete: Cascade)
+  seller  User     @relation("SellerTransactions", fields: [sellerId], references: [id], onDelete: Cascade)
+  company Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  bid     Bid?     @relation(fields: [bidId], references: [id], onDelete: SetNull)
+  ask     Ask?     @relation(fields: [askId], references: [id], onDelete: SetNull)
+
+  @@map("transactions")
+}
+
+model LlmPrompt {
+  id           Int      @id @default(autoincrement()) @map("prompt_id")
+  userId       Int      @map("user_id")
+  promptText   String   @map("prompt_text") @db.Text
+  isActive     Boolean  @default(false) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  lastModified DateTime @default(now()) @map("last_modified")
+  version      Int      @default(1)
+
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  llmActivityLogs LlmActivityLog[]
+
+  @@map("llm_prompts")
+}
+
+model Post {
+  id                 Int      @id @default(autoincrement()) @map("post_id")
+  userId             Int      @map("user_id")
+  content            String   @db.Text
+  mentionedCompanyId Int?     @map("mentioned_company_id")
+  createdAt          DateTime @default(now()) @map("created_at")
+  isEdited           Boolean  @default(false) @map("is_edited")
+  editedAt           DateTime? @map("edited_at")
+
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mentionedCompany Company? @relation(fields: [mentionedCompanyId], references: [id], onDelete: SetNull)
+
+  @@map("posts")
+}
+
+model LlmActivityLog {
+  id            Int      @id @default(autoincrement()) @map("log_id")
+  userId        Int      @map("user_id")
+  promptId      Int?     @map("prompt_id")
+  actionType    String   @map("action_type") @db.VarChar(50)
+  actionDetails Json?    @map("action_details")
+  result        Json?
+  timestamp     DateTime @default(now())
+
+  user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  prompt LlmPrompt? @relation(fields: [promptId], references: [id], onDelete: SetNull)
+
+  @@map("llm_activity_log")
+}
