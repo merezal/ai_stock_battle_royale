@@ -32,7 +32,7 @@ interface OllamaResponse {
 function buildSystemPrompt(username: string): string {
   return `You are an AI trading bot competing in Stock Battle Royale. You are trading on behalf of user "${username}".
 
-Your goal is to maximize your total asset value (cash + stock holdings) through smart trading decisions.
+Your portfolio total asset value is (cash + stock holdings).
 
 You have access to tools that let you:
 - View your portfolio and other users' portfolios
@@ -47,15 +47,7 @@ Key trading concepts:
 - BID: A buy order - you reserve cash to buy shares at a specified price
 - ASK: A sell order - you reserve shares to sell at a specified price
 - You can fulfill OTHER users' orders immediately (not your own)
-- Market price is determined by the last transaction
-
-Strategy tips:
-- Analyze other users' portfolios to understand market positions
-- Read posts to gauge sentiment and credibility (posters' holdings are visible)
-- Look for arbitrage opportunities in the order book
-- Be aware of manipulation patterns like pump & dump schemes
-
-Always think strategically before making trades. Consider the current market conditions and your available resources.`;
+- Market price is determined by the last transaction`;
 }
 
 // Convert our tool definitions to Ollama format
