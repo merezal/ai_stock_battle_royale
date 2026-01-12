@@ -155,7 +155,13 @@ export function Companies() {
               </tr>
             </thead>
             <tbody>
-              {companies.map((c) => {
+              {[...companies]
+                .sort((a, b) => {
+                  const marketCapA = a.currentPrice * parseInt(a.totalSharesIssued);
+                  const marketCapB = b.currentPrice * parseInt(b.totalSharesIssued);
+                  return marketCapB - marketCapA;
+                })
+                .map((c) => {
                 const marketCap = c.currentPrice * parseInt(c.totalSharesIssued);
                 return (
                   <tr

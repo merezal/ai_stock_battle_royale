@@ -220,7 +220,7 @@ router.post('/bids/:bidId/fulfill', async (req: Request<{ bidId: string }>, res:
     // Execute transaction
     const transaction = await prisma.$transaction(async (tx) => {
       // Deduct shares from seller
-      await tx.stockHolding.update({
+      const updatedSellerHolding = await tx.stockHolding.update({
         where: {
           userId_companyId: {
             userId: sellerId,
@@ -231,6 +231,18 @@ router.post('/bids/:bidId/fulfill', async (req: Request<{ bidId: string }>, res:
           sharesOwned: { decrement: bid.sharesRequested },
         },
       });
+
+      // Delete holding if shares reached 0
+      if (Number(updatedSellerHolding.sharesOwned) === 0) {
+        await tx.stockHolding.delete({
+          where: {
+            userId_companyId: {
+              userId: sellerId,
+              companyId: bid.companyId,
+            },
+          },
+        });
+      }
 
       // Add shares to buyer (create or update holding)
       await tx.stockHolding.upsert({
@@ -355,7 +367,7 @@ router.post('/asks/:askId/fulfill', async (req: Request<{ askId: string }>, res:
     // Execute transaction
     const transaction = await prisma.$transaction(async (tx) => {
       // Deduct shares from seller (both owned and reserved)
-      await tx.stockHolding.update({
+      const updatedSellerHolding = await tx.stockHolding.update({
         where: {
           userId_companyId: {
             userId: ask.userId,
@@ -367,6 +379,18 @@ router.post('/asks/:askId/fulfill', async (req: Request<{ askId: string }>, res:
           reservedShares: { decrement: ask.sharesOffered },
         },
       });
+
+      // Delete holding if shares reached 0
+      if (Number(updatedSellerHolding.sharesOwned) === 0) {
+        await tx.stockHolding.delete({
+          where: {
+            userId_companyId: {
+              userId: ask.userId,
+              companyId: ask.companyId,
+            },
+          },
+        });
+      }
 
       // Add shares to buyer (create or update holding)
       await tx.stockHolding.upsert({

@@ -77,24 +77,26 @@ router.get('/by-username/:username/portfolio', async (req: Request<{ username: s
     }
 
     let stockValue = 0;
-    const holdings = user.stockHoldings.map(h => {
-      const lastTransaction = h.company.transactions[0];
-      const currentPrice = lastTransaction
-        ? Number(lastTransaction.pricePerShare)
-        : Number(h.company.foundingCost) / Number(h.company.totalSharesIssued);
-      const positionValue = Number(h.sharesOwned) * currentPrice;
-      stockValue += positionValue;
+    const holdings = user.stockHoldings
+      .filter(h => Number(h.sharesOwned) > 0)
+      .map(h => {
+        const lastTransaction = h.company.transactions[0];
+        const currentPrice = lastTransaction
+          ? Number(lastTransaction.pricePerShare)
+          : Number(h.company.foundingCost) / Number(h.company.totalSharesIssued);
+        const positionValue = Number(h.sharesOwned) * currentPrice;
+        stockValue += positionValue;
 
-      return {
-        ticker: h.company.tickerSymbol,
-        companyName: h.company.companyName,
-        sharesOwned: Number(h.sharesOwned),
-        reservedShares: Number(h.reservedShares),
-        availableShares: Number(h.sharesOwned) - Number(h.reservedShares),
-        currentPrice,
-        positionValue,
-      };
-    });
+        return {
+          ticker: h.company.tickerSymbol,
+          companyName: h.company.companyName,
+          sharesOwned: Number(h.sharesOwned),
+          reservedShares: Number(h.reservedShares),
+          availableShares: Number(h.sharesOwned) - Number(h.reservedShares),
+          currentPrice,
+          positionValue,
+        };
+      });
 
     const cashBalance = Number(user.account.cashBalance);
     const reservedCash = Number(user.account.reservedCash);
@@ -147,13 +149,15 @@ router.get('/:id', async (req: Request<{ id: string }>, res: Response) => {
       cashBalance,
       reservedCash,
       availableCash: cashBalance - reservedCash,
-      holdings: user.stockHoldings.map(h => ({
-        ticker: h.company.tickerSymbol,
-        companyName: h.company.companyName,
-        sharesOwned: Number(h.sharesOwned),
-        reservedShares: Number(h.reservedShares),
-        availableShares: Number(h.sharesOwned) - Number(h.reservedShares),
-      })),
+      holdings: user.stockHoldings
+        .filter(h => Number(h.sharesOwned) > 0)
+        .map(h => ({
+          ticker: h.company.tickerSymbol,
+          companyName: h.company.companyName,
+          sharesOwned: Number(h.sharesOwned),
+          reservedShares: Number(h.reservedShares),
+          availableShares: Number(h.sharesOwned) - Number(h.reservedShares),
+        })),
       createdAt: user.createdAt,
     });
   } catch (error) {
@@ -191,24 +195,26 @@ router.get('/:id/portfolio', async (req: Request<{ id: string }>, res: Response)
     }
 
     let stockValue = 0;
-    const holdings = user.stockHoldings.map(h => {
-      const lastTransaction = h.company.transactions[0];
-      const currentPrice = lastTransaction
-        ? Number(lastTransaction.pricePerShare)
-        : Number(h.company.foundingCost) / Number(h.company.totalSharesIssued);
-      const positionValue = Number(h.sharesOwned) * currentPrice;
-      stockValue += positionValue;
+    const holdings = user.stockHoldings
+      .filter(h => Number(h.sharesOwned) > 0)
+      .map(h => {
+        const lastTransaction = h.company.transactions[0];
+        const currentPrice = lastTransaction
+          ? Number(lastTransaction.pricePerShare)
+          : Number(h.company.foundingCost) / Number(h.company.totalSharesIssued);
+        const positionValue = Number(h.sharesOwned) * currentPrice;
+        stockValue += positionValue;
 
-      return {
-        ticker: h.company.tickerSymbol,
-        companyName: h.company.companyName,
-        sharesOwned: Number(h.sharesOwned),
-        reservedShares: Number(h.reservedShares),
-        availableShares: Number(h.sharesOwned) - Number(h.reservedShares),
-        currentPrice,
-        positionValue,
-      };
-    });
+        return {
+          ticker: h.company.tickerSymbol,
+          companyName: h.company.companyName,
+          sharesOwned: Number(h.sharesOwned),
+          reservedShares: Number(h.reservedShares),
+          availableShares: Number(h.sharesOwned) - Number(h.reservedShares),
+          currentPrice,
+          positionValue,
+        };
+      });
 
     const cashBalance = Number(user.account.cashBalance);
     const reservedCash = Number(user.account.reservedCash);
@@ -252,13 +258,15 @@ router.get('/', async (_req: Request, res: Response) => {
 
     const leaderboard = users.map(user => {
       let stockValue = 0;
-      user.stockHoldings.forEach(h => {
-        const lastTransaction = h.company.transactions[0];
-        const currentPrice = lastTransaction
-          ? Number(lastTransaction.pricePerShare)
-          : Number(h.company.foundingCost) / Number(h.company.totalSharesIssued);
-        stockValue += Number(h.sharesOwned) * currentPrice;
-      });
+      user.stockHoldings
+        .filter(h => Number(h.sharesOwned) > 0)
+        .forEach(h => {
+          const lastTransaction = h.company.transactions[0];
+          const currentPrice = lastTransaction
+            ? Number(lastTransaction.pricePerShare)
+            : Number(h.company.foundingCost) / Number(h.company.totalSharesIssued);
+          stockValue += Number(h.sharesOwned) * currentPrice;
+        });
 
       const cashBalance = Number(user.account?.cashBalance || 0);
 
@@ -377,7 +385,7 @@ router.get('/by-username/:username/portfolio-history', async (req: Request<{ use
 
     if (currentUser && currentUser.account) {
       let currentStockValue = 0;
-      for (const h of currentUser.stockHoldings) {
+      for (const h of currentUser.stockHoldings.filter(h => Number(h.sharesOwned) > 0)) {
         const lastTx = h.company.transactions[0];
         const price = lastTx
           ? Number(lastTx.pricePerShare)

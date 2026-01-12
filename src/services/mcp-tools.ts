@@ -249,18 +249,20 @@ export async function executeGetMyPortfolio(userId: number) {
   }
 
   const holdings = await Promise.all(
-    user.stockHoldings.map(async (h) => {
-      const price = await getCurrentPrice(h.companyId, Number(h.company.foundingCost), h.company.totalSharesIssued);
-      return {
-        ticker: h.company.tickerSymbol,
-        companyName: h.company.companyName,
-        sharesOwned: Number(h.sharesOwned),
-        reservedShares: Number(h.reservedShares),
-        availableShares: Number(h.sharesOwned) - Number(h.reservedShares),
-        currentPrice: price,
-        positionValue: Number(h.sharesOwned) * price,
-      };
-    })
+    user.stockHoldings
+      .filter((h) => Number(h.sharesOwned) > 0)
+      .map(async (h) => {
+        const price = await getCurrentPrice(h.companyId, Number(h.company.foundingCost), h.company.totalSharesIssued);
+        return {
+          ticker: h.company.tickerSymbol,
+          companyName: h.company.companyName,
+          sharesOwned: Number(h.sharesOwned),
+          reservedShares: Number(h.reservedShares),
+          availableShares: Number(h.sharesOwned) - Number(h.reservedShares),
+          currentPrice: price,
+          positionValue: Number(h.sharesOwned) * price,
+        };
+      })
   );
 
   const stockValue = holdings.reduce((sum, h) => sum + h.positionValue, 0);
@@ -292,16 +294,18 @@ export async function executeGetUserPortfolio(username: string) {
   }
 
   const holdings = await Promise.all(
-    user.stockHoldings.map(async (h) => {
-      const price = await getCurrentPrice(h.companyId, Number(h.company.foundingCost), h.company.totalSharesIssued);
-      return {
-        ticker: h.company.tickerSymbol,
-        companyName: h.company.companyName,
-        sharesOwned: Number(h.sharesOwned),
-        currentPrice: price,
-        positionValue: Number(h.sharesOwned) * price,
-      };
-    })
+    user.stockHoldings
+      .filter((h) => Number(h.sharesOwned) > 0)
+      .map(async (h) => {
+        const price = await getCurrentPrice(h.companyId, Number(h.company.foundingCost), h.company.totalSharesIssued);
+        return {
+          ticker: h.company.tickerSymbol,
+          companyName: h.company.companyName,
+          sharesOwned: Number(h.sharesOwned),
+          currentPrice: price,
+          positionValue: Number(h.sharesOwned) * price,
+        };
+      })
   );
 
   const stockValue = holdings.reduce((sum, h) => sum + h.positionValue, 0);
@@ -629,12 +633,21 @@ export async function executeFulfillBid(userId: number, bidId: number) {
   }
 
   const transaction = await prisma.$transaction(async (tx) => {
-    await tx.stockHolding.update({
+    const updatedSellerHolding = await tx.stockHolding.update({
       where: {
         userId_companyId: { userId, companyId: bid.companyId },
       },
       data: { sharesOwned: { decrement: bid.sharesRequested } },
     });
+
+    // Delete holding if shares reached 0
+    if (Number(updatedSellerHolding.sharesOwned) === 0) {
+      await tx.stockHolding.delete({
+        where: {
+          userId_companyId: { userId, companyId: bid.companyId },
+        },
+      });
+    }
 
     await tx.stockHolding.upsert({
       where: {
@@ -725,7 +738,7 @@ export async function executeFulfillAsk(userId: number, askId: number) {
   }
 
   const transaction = await prisma.$transaction(async (tx) => {
-    await tx.stockHolding.update({
+    const updatedSellerHolding = await tx.stockHolding.update({
       where: {
         userId_companyId: { userId: ask.userId, companyId: ask.companyId },
       },
@@ -734,6 +747,15 @@ export async function executeFulfillAsk(userId: number, askId: number) {
         reservedShares: { decrement: ask.sharesOffered },
       },
     });
+
+    // Delete holding if shares reached 0
+    if (Number(updatedSellerHolding.sharesOwned) === 0) {
+      await tx.stockHolding.delete({
+        where: {
+          userId_companyId: { userId: ask.userId, companyId: ask.companyId },
+        },
+      });
+    }
 
     await tx.stockHolding.upsert({
       where: {
