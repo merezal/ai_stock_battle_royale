@@ -45,7 +45,7 @@ model Company {
   id               Int      @id @default(autoincrement()) @map("company_id")
   tickerSymbol     String   @unique @map("ticker_symbol") @db.VarChar(10)
   companyName      String   @map("company_name") @db.VarChar(255)
-  foundedByUserId  Int?     @unique @map("founded_by_user_id")
+  foundedByUserId  Int?     @map("founded_by_user_id")
   foundingCost     Decimal? @map("founding_cost") @db.Decimal(15, 2)
   totalSharesIssued BigInt   @map("total_shares_issued")
   splitMultiplier  Decimal  @default(1.0) @map("split_multiplier") @db.Decimal(15, 8)
