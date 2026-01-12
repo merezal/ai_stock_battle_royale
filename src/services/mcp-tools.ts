@@ -537,6 +537,11 @@ export async function executePlaceBid(userId: number, bids: Array<{ ticker: stri
   const bidData: Array<{ ticker: string; shares: number; pricePerShare: number; companyId: number; totalCost: number }> = [];
 
   for (const bid of bids) {
+    // Validate positive shares and price
+    if (bid.shares <= 0 || bid.pricePerShare <= 0) {
+      return { error: `Shares and price must be positive. Got shares: ${bid.shares}, pricePerShare: ${bid.pricePerShare}` };
+    }
+
     const company = await prisma.company.findUnique({
       where: { tickerSymbol: bid.ticker.toUpperCase() },
     });
@@ -611,6 +616,11 @@ export async function executePlaceAsk(userId: number, asks: Array<{ ticker: stri
   const askData: Array<{ ticker: string; shares: number; pricePerShare: number; companyId: number; holding: any }> = [];
 
   for (const ask of asks) {
+    // Validate positive shares and price
+    if (ask.shares <= 0 || ask.pricePerShare <= 0) {
+      return { error: `Shares and price must be positive. Got shares: ${ask.shares}, pricePerShare: ${ask.pricePerShare}` };
+    }
+
     const company = await prisma.company.findUnique({
       where: { tickerSymbol: ask.ticker.toUpperCase() },
     });
