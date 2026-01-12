@@ -361,55 +361,72 @@ Focus on:
         {logsLoading ? (
           <p className="text-gray-400">Loading logs...</p>
         ) : logs && logs.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="text-left text-gray-400 text-sm border-b border-gray-700">
-                  <th className="pb-2">Time</th>
-                  <th className="pb-2">Action</th>
-                  <th className="pb-2">Details</th>
-                  <th className="pb-2">Result</th>
-                </tr>
-              </thead>
-              <tbody>
-                {logs.map((log) => (
-                  <tr key={log.logId} className="border-b border-gray-700/50">
-                    <td className="py-2 text-gray-400 text-sm whitespace-nowrap">
-                      {new Date(log.timestamp).toLocaleString()}
-                    </td>
-                    <td className="py-2">
-                      <code className="text-blue-400 text-sm">{log.actionType}</code>
-                    </td>
-                    <td className="py-2 text-gray-300 text-sm max-w-xs truncate">
-                      {log.actionDetails && Object.keys(log.actionDetails).length > 0
-                        ? JSON.stringify(log.actionDetails)
-                        : '-'}
-                    </td>
-                    <td className="py-2">
-                      {(log.result as { error?: string })?.error ? (
-                        <span className="text-red-400 text-sm">
-                          {(log.result as { error: string }).error}
+          <div className="space-y-3">
+            {logs.map((log) => {
+              // Display assistant messages differently
+              if (log.actionType === 'assistant_message') {
+                const content = (log.result as { content?: string })?.content || '';
+                return (
+                  <div
+                    key={log.logId}
+                    className="bg-gray-700/50 border border-gray-600 rounded-lg p-4"
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-purple-400 font-medium text-sm">AI Message</span>
+                      </div>
+                      <span className="text-gray-500 text-xs">
+                        {new Date(log.timestamp).toLocaleString()}
+                      </span>
+                    </div>
+                    <p className="text-gray-200 text-sm whitespace-pre-wrap">{content}</p>
+                  </div>
+                );
+              }
+
+              // Display tool calls and other actions in table format
+              return (
+                <div
+                  key={log.logId}
+                  className="bg-gray-700/30 border border-gray-700 rounded-lg p-3"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-2 mb-1">
+                        <code className="text-blue-400 text-sm">{log.actionType}</code>
+                        <span className="text-gray-500 text-xs">
+                          {new Date(log.timestamp).toLocaleString()}
                         </span>
-                      ) : (log.result as { success?: boolean })?.success !== undefined ? (
-                        <span
-                          className={`text-sm ${
-                            (log.result as { success: boolean }).success
-                              ? 'text-green-400'
-                              : 'text-red-400'
-                          }`}
-                        >
-                          {(log.result as { success: boolean }).success
-                            ? 'Success'
-                            : 'Failed'}
-                        </span>
-                      ) : (
-                        <span className="text-gray-500 text-sm">-</span>
+                      </div>
+                      {log.actionDetails && Object.keys(log.actionDetails).length > 0 && (
+                        <div className="text-gray-400 text-xs mb-1">
+                          {JSON.stringify(log.actionDetails)}
+                        </div>
                       )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      <div>
+                        {(log.result as { error?: string })?.error ? (
+                          <span className="text-red-400 text-sm">
+                            Error: {(log.result as { error: string }).error}
+                          </span>
+                        ) : (log.result as { success?: boolean })?.success !== undefined ? (
+                          <span
+                            className={`text-sm ${
+                              (log.result as { success: boolean }).success
+                                ? 'text-green-400'
+                                : 'text-red-400'
+                            }`}
+                          >
+                            {(log.result as { success: boolean }).success
+                              ? 'Success'
+                              : 'Failed'}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         ) : (
           <p className="text-gray-500">No activity logs yet. Run your bot to see activity.</p>

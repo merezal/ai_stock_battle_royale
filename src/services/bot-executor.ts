@@ -130,6 +130,7 @@ export async function executeBot(userId: number, promptId: number, promptText: s
   ];
 
   let toolCallCount = 0;
+  let messageCount = 0; // Track messages to skip initial system/user prompts
   const executionLog: Array<{ action: string; result: unknown }> = [];
 
   try {
@@ -142,6 +143,23 @@ export async function executeBot(userId: number, promptId: number, promptText: s
         content: response.message.content || '',
         tool_calls: response.message.tool_calls,
       });
+
+      messageCount++;
+
+      // Log assistant message (skip initial ones if they're just echoing the prompt)
+      const assistantContent = response.message.content || '';
+      if (assistantContent.trim().length > 0 && messageCount > 0) {
+        // Log the message as an activity
+        await logActivity(userId, promptId, 'assistant_message', {}, {
+          content: assistantContent,
+          hasPending: !!response.message.tool_calls && response.message.tool_calls.length > 0,
+        });
+
+        executionLog.push({
+          action: 'assistant_message',
+          result: { content: assistantContent },
+        });
+      }
 
       // If no tool calls, we're done
       if (!response.message.tool_calls || response.message.tool_calls.length === 0) {
