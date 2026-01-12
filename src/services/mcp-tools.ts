@@ -104,46 +104,50 @@ export const toolDefinitions = [
   },
   {
     name: 'place_bid',
-    description: 'Place a buy order (bid) for shares of a stock. This reserves your cash until the order is fulfilled or cancelled.',
+    description: 'Place one or more buy orders (bids) for shares. This reserves your cash until orders are fulfilled or cancelled.',
     parameters: {
       type: 'object',
       properties: {
-        ticker: {
-          type: 'string',
-          description: 'The stock ticker symbol',
-        },
-        shares: {
-          type: 'number',
-          description: 'Number of shares to buy',
-        },
-        pricePerShare: {
-          type: 'number',
-          description: 'Maximum price per share you are willing to pay',
+        bids: {
+          type: 'array',
+          description: 'Array of one or more bids to place. Each bid should have ticker, shares, and pricePerShare',
+          items: {
+            type: 'object',
+            properties: {
+              ticker: { type: 'string', description: 'Stock ticker symbol' },
+              shares: { type: 'number', description: 'Number of shares to buy' },
+              pricePerShare: { type: 'number', description: 'Maximum price per share willing to pay' },
+            },
+            required: ['ticker', 'shares', 'pricePerShare'],
+          },
+          minItems: 1,
         },
       },
-      required: ['ticker', 'shares', 'pricePerShare'],
+      required: ['bids'],
     },
   },
   {
     name: 'place_ask',
-    description: 'Place a sell order (ask) for shares you own. This reserves your shares until the order is fulfilled or cancelled.',
+    description: 'Place one or more sell orders (asks) for shares you own. This reserves your shares until orders are fulfilled or cancelled.',
     parameters: {
       type: 'object',
       properties: {
-        ticker: {
-          type: 'string',
-          description: 'The stock ticker symbol',
-        },
-        shares: {
-          type: 'number',
-          description: 'Number of shares to sell',
-        },
-        pricePerShare: {
-          type: 'number',
-          description: 'Minimum price per share you want to receive',
+        asks: {
+          type: 'array',
+          description: 'Array of one or more asks to place. Each ask should have ticker, shares, and pricePerShare',
+          items: {
+            type: 'object',
+            properties: {
+              ticker: { type: 'string', description: 'Stock ticker symbol' },
+              shares: { type: 'number', description: 'Number of shares to sell' },
+              pricePerShare: { type: 'number', description: 'Minimum price per share you want' },
+            },
+            required: ['ticker', 'shares', 'pricePerShare'],
+          },
+          minItems: 1,
         },
       },
-      required: ['ticker', 'shares', 'pricePerShare'],
+      required: ['asks'],
     },
   },
   {
@@ -176,30 +180,38 @@ export const toolDefinitions = [
   },
   {
     name: 'cancel_bid',
-    description: 'Cancel one of your open buy orders to get your reserved cash back',
+    description: 'Cancel one or more of your open buy orders to get your reserved cash back.',
     parameters: {
       type: 'object',
       properties: {
-        bidId: {
-          type: 'number',
-          description: 'The ID of the bid to cancel',
+        bidIds: {
+          type: 'array',
+          description: 'Array of one or more bid IDs to cancel',
+          items: {
+            type: 'number',
+          },
+          minItems: 1,
         },
       },
-      required: ['bidId'],
+      required: ['bidIds'],
     },
   },
   {
     name: 'cancel_ask',
-    description: 'Cancel one of your open sell orders to get your reserved shares back',
+    description: 'Cancel one or more of your open sell orders to get your reserved shares back.',
     parameters: {
       type: 'object',
       properties: {
-        askId: {
-          type: 'number',
-          description: 'The ID of the ask to cancel',
+        askIds: {
+          type: 'array',
+          description: 'Array of one or more ask IDs to cancel',
+          items: {
+            type: 'number',
+          },
+          minItems: 1,
         },
       },
-      required: ['askId'],
+      required: ['askIds'],
     },
   },
   {
@@ -497,26 +509,44 @@ export async function executeGetPosts(ticker?: string, limit = 20) {
   }));
 }
 
-export async function executePlaceBid(userId: number, ticker: string, shares: number, pricePerShare: number) {
-  const shareCount = BigInt(shares);
-  const totalCost = shares * pricePerShare;
+export async function executePlaceBid(userId: number, bids: Array<{ ticker: string; shares: number; pricePerShare: number }>) {
+  if (!bids || bids.length === 0) {
+    return { error: 'No bids provided. Must provide array of one or more bids.' };
+  }
 
-  const [user, company] = await Promise.all([
-    prisma.user.findUnique({
-      where: { id: userId },
-      include: { account: true },
-    }),
-    prisma.company.findUnique({
-      where: { tickerSymbol: ticker.toUpperCase() },
-    }),
-  ]);
+  // Get user account
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { account: true },
+  });
 
   if (!user || !user.account) {
     return { error: 'User not found' };
   }
 
-  if (!company) {
-    return { error: `Company '${ticker}' not found` };
+  // Calculate total cost and validate companies
+  let totalCost = 0;
+  const bidData: Array<{ ticker: string; shares: number; pricePerShare: number; companyId: number; totalCost: number }> = [];
+
+  for (const bid of bids) {
+    const company = await prisma.company.findUnique({
+      where: { tickerSymbol: bid.ticker.toUpperCase() },
+    });
+
+    if (!company) {
+      return { error: `Company '${bid.ticker}' not found` };
+    }
+
+    const bidCost = bid.shares * bid.pricePerShare;
+    totalCost += bidCost;
+
+    bidData.push({
+      ticker: bid.ticker.toUpperCase(),
+      shares: bid.shares,
+      pricePerShare: bid.pricePerShare,
+      companyId: company.id,
+      totalCost: bidCost,
+    });
   }
 
   const availableCash = Number(user.account.cashBalance) - Number(user.account.reservedCash);
@@ -524,87 +554,135 @@ export async function executePlaceBid(userId: number, ticker: string, shares: nu
     return { error: `Insufficient funds. Need $${totalCost}, have $${availableCash} available.` };
   }
 
-  const bid = await prisma.$transaction(async (tx) => {
+  // Place all bids in a transaction
+  const results = await prisma.$transaction(async (tx) => {
+    // Reserve total cash
     await tx.account.update({
       where: { userId },
       data: { reservedCash: { increment: totalCost } },
     });
 
-    return tx.bid.create({
-      data: {
-        userId,
-        companyId: company.id,
-        sharesRequested: shareCount,
-        pricePerShare,
-        totalCost,
-        status: 'open',
-      },
-    });
+    // Create all bids
+    const createdBids = [];
+    for (const bid of bidData) {
+      const createdBid = await tx.bid.create({
+        data: {
+          userId,
+          companyId: bid.companyId,
+          sharesRequested: BigInt(bid.shares),
+          pricePerShare: bid.pricePerShare,
+          totalCost: bid.totalCost,
+          status: 'open',
+        },
+      });
+      createdBids.push({
+        bidId: createdBid.id,
+        ticker: bid.ticker,
+        shares: bid.shares,
+        pricePerShare: bid.pricePerShare,
+        totalCost: bid.totalCost,
+      });
+    }
+    return createdBids;
   });
 
   return {
     success: true,
-    bidId: bid.id,
-    ticker: ticker.toUpperCase(),
-    shares,
-    pricePerShare,
+    bids: results,
     totalCost,
     remainingAvailableCash: availableCash - totalCost,
   };
 }
 
-export async function executePlaceAsk(userId: number, ticker: string, shares: number, pricePerShare: number) {
-  const shareCount = BigInt(shares);
-
-  const company = await prisma.company.findUnique({
-    where: { tickerSymbol: ticker.toUpperCase() },
-  });
-
-  if (!company) {
-    return { error: `Company '${ticker}' not found` };
+export async function executePlaceAsk(userId: number, asks: Array<{ ticker: string; shares: number; pricePerShare: number }>) {
+  if (!asks || asks.length === 0) {
+    return { error: 'No asks provided. Must provide array of one or more asks.' };
   }
 
-  const holding = await prisma.stockHolding.findUnique({
-    where: {
-      userId_companyId: { userId, companyId: company.id },
-    },
-  });
+  // Validate companies and holdings
+  const askData: Array<{ ticker: string; shares: number; pricePerShare: number; companyId: number; holding: any }> = [];
 
-  if (!holding) {
-    return { error: `You do not own any shares of ${ticker}` };
-  }
+  for (const ask of asks) {
+    const company = await prisma.company.findUnique({
+      where: { tickerSymbol: ask.ticker.toUpperCase() },
+    });
 
-  const availableShares = Number(holding.sharesOwned) - Number(holding.reservedShares);
-  if (shares > availableShares) {
-    return { error: `Insufficient shares. Trying to sell ${shares}, only have ${availableShares} available.` };
-  }
+    if (!company) {
+      return { error: `Company '${ask.ticker}' not found` };
+    }
 
-  const ask = await prisma.$transaction(async (tx) => {
-    await tx.stockHolding.update({
+    const holding = await prisma.stockHolding.findUnique({
       where: {
         userId_companyId: { userId, companyId: company.id },
       },
-      data: { reservedShares: { increment: shareCount } },
     });
 
-    return tx.ask.create({
-      data: {
-        userId,
-        companyId: company.id,
-        sharesOffered: shareCount,
-        pricePerShare,
-        status: 'open',
-      },
+    if (!holding) {
+      return { error: `You do not own any shares of ${ask.ticker}` };
+    }
+
+    askData.push({
+      ticker: ask.ticker.toUpperCase(),
+      shares: ask.shares,
+      pricePerShare: ask.pricePerShare,
+      companyId: company.id,
+      holding,
     });
+  }
+
+  // Check if user has enough shares for all asks
+  const sharesByCompany = new Map<number, number>();
+  for (const ask of askData) {
+    const current = sharesByCompany.get(ask.companyId) || 0;
+    sharesByCompany.set(ask.companyId, current + ask.shares);
+  }
+
+  for (const ask of askData) {
+    const totalSharesNeeded = sharesByCompany.get(ask.companyId) || 0;
+    const availableShares = Number(ask.holding.sharesOwned) - Number(ask.holding.reservedShares);
+    if (totalSharesNeeded > availableShares) {
+      return { error: `Insufficient shares of ${ask.ticker}. Need ${totalSharesNeeded}, have ${availableShares} available.` };
+    }
+  }
+
+  // Place all asks in a transaction
+  const results = await prisma.$transaction(async (tx) => {
+    const createdAsks = [];
+
+    for (const ask of askData) {
+      // Reserve shares
+      await tx.stockHolding.update({
+        where: {
+          userId_companyId: { userId, companyId: ask.companyId },
+        },
+        data: { reservedShares: { increment: BigInt(ask.shares) } },
+      });
+
+      // Create ask
+      const createdAsk = await tx.ask.create({
+        data: {
+          userId,
+          companyId: ask.companyId,
+          sharesOffered: BigInt(ask.shares),
+          pricePerShare: ask.pricePerShare,
+          status: 'open',
+        },
+      });
+
+      createdAsks.push({
+        askId: createdAsk.id,
+        ticker: ask.ticker,
+        shares: ask.shares,
+        pricePerShare: ask.pricePerShare,
+      });
+    }
+
+    return createdAsks;
   });
 
   return {
     success: true,
-    askId: ask.id,
-    ticker: ticker.toUpperCase(),
-    shares,
-    pricePerShare,
-    remainingAvailableShares: availableShares - shares,
+    asks: results,
   };
 }
 
@@ -831,31 +909,46 @@ export async function executeFulfillAsk(userId: number, askId: number) {
   };
 }
 
-export async function executeCancelBid(userId: number, bidId: number) {
-  const bid = await prisma.bid.findUnique({
-    where: { id: bidId },
+export async function executeCancelBid(userId: number, bidIds: number[]) {
+  if (!bidIds || bidIds.length === 0) {
+    return { error: 'No bid IDs provided. Must provide array of one or more bid IDs.' };
+  }
+
+  // Fetch all bids
+  const bids = await prisma.bid.findMany({
+    where: { id: { in: bidIds } },
   });
 
-  if (!bid) {
-    return { error: 'Bid not found' };
+  if (bids.length !== bidIds.length) {
+    const foundIds = bids.map(b => b.id);
+    const missingIds = bidIds.filter(id => !foundIds.includes(id));
+    return { error: `Bid(s) not found: ${missingIds.join(', ')}` };
   }
 
-  if (bid.status !== 'open') {
-    return { error: 'Bid is no longer open' };
+  // Validate all bids
+  for (const bid of bids) {
+    if (bid.status !== 'open') {
+      return { error: `Bid ${bid.id} is no longer open` };
+    }
+    if (bid.userId !== userId) {
+      return { error: `You can only cancel your own bids (bid ${bid.id})` };
+    }
   }
 
-  if (bid.userId !== userId) {
-    return { error: 'You can only cancel your own bids' };
-  }
+  // Calculate total cash to unreserve
+  const totalCashToUnreserve = bids.reduce((sum, bid) => sum + Number(bid.totalCost), 0);
 
+  // Cancel all bids in a transaction
   await prisma.$transaction(async (tx) => {
+    // Unreserve total cash
     await tx.account.update({
       where: { userId },
-      data: { reservedCash: { decrement: Number(bid.totalCost) } },
+      data: { reservedCash: { decrement: totalCashToUnreserve } },
     });
 
-    await tx.bid.update({
-      where: { id: bidId },
+    // Cancel all bids
+    await tx.bid.updateMany({
+      where: { id: { in: bidIds } },
       data: { status: 'cancelled' },
     });
   });
@@ -866,57 +959,74 @@ export async function executeCancelBid(userId: number, bidId: number) {
 
   return {
     success: true,
-    cashUnreserved: Number(bid.totalCost),
+    cancelledBids: bids.map(b => ({ bidId: b.id, cashUnreserved: Number(b.totalCost) })),
+    totalCashUnreserved: totalCashToUnreserve,
     newAvailableCash: account
       ? Number(account.cashBalance) - Number(account.reservedCash)
       : 0,
   };
 }
 
-export async function executeCancelAsk(userId: number, askId: number) {
-  const ask = await prisma.ask.findUnique({
-    where: { id: askId },
+export async function executeCancelAsk(userId: number, askIds: number[]) {
+  if (!askIds || askIds.length === 0) {
+    return { error: 'No ask IDs provided. Must provide array of one or more ask IDs.' };
+  }
+
+  // Fetch all asks
+  const asks = await prisma.ask.findMany({
+    where: { id: { in: askIds } },
     include: { company: true },
   });
 
-  if (!ask) {
-    return { error: 'Ask not found' };
+  if (asks.length !== askIds.length) {
+    const foundIds = asks.map(a => a.id);
+    const missingIds = askIds.filter(id => !foundIds.includes(id));
+    return { error: `Ask(s) not found: ${missingIds.join(', ')}` };
   }
 
-  if (ask.status !== 'open') {
-    return { error: 'Ask is no longer open' };
+  // Validate all asks
+  for (const ask of asks) {
+    if (ask.status !== 'open') {
+      return { error: `Ask ${ask.id} is no longer open` };
+    }
+    if (ask.userId !== userId) {
+      return { error: `You can only cancel your own asks (ask ${ask.id})` };
+    }
   }
 
-  if (ask.userId !== userId) {
-    return { error: 'You can only cancel your own asks' };
+  // Group shares by company
+  const sharesByCompany = new Map<number, bigint>();
+  for (const ask of asks) {
+    const current = sharesByCompany.get(ask.companyId) || BigInt(0);
+    sharesByCompany.set(ask.companyId, current + ask.sharesOffered);
   }
 
+  // Cancel all asks in a transaction
   await prisma.$transaction(async (tx) => {
-    await tx.stockHolding.update({
-      where: {
-        userId_companyId: { userId, companyId: ask.companyId },
-      },
-      data: { reservedShares: { decrement: ask.sharesOffered } },
-    });
+    // Unreserve shares for each company
+    for (const [companyId, shares] of sharesByCompany.entries()) {
+      await tx.stockHolding.update({
+        where: {
+          userId_companyId: { userId, companyId },
+        },
+        data: { reservedShares: { decrement: shares } },
+      });
+    }
 
-    await tx.ask.update({
-      where: { id: askId },
+    // Cancel all asks
+    await tx.ask.updateMany({
+      where: { id: { in: askIds } },
       data: { status: 'cancelled' },
     });
   });
 
-  const holding = await prisma.stockHolding.findUnique({
-    where: {
-      userId_companyId: { userId, companyId: ask.companyId },
-    },
-  });
-
   return {
     success: true,
-    sharesUnreserved: Number(ask.sharesOffered),
-    newAvailableShares: holding
-      ? Number(holding.sharesOwned) - Number(holding.reservedShares)
-      : 0,
+    cancelledAsks: asks.map(a => ({
+      askId: a.id,
+      ticker: a.company.tickerSymbol,
+      sharesUnreserved: Number(a.sharesOffered),
+    })),
   };
 }
 
@@ -975,27 +1085,17 @@ export async function executeTool(userId: number, toolName: string, args: Record
     case 'get_posts':
       return executeGetPosts(args.ticker as string | undefined, args.limit as number | undefined);
     case 'place_bid':
-      return executePlaceBid(
-        userId,
-        args.ticker as string,
-        args.shares as number,
-        args.pricePerShare as number
-      );
+      return executePlaceBid(userId, args.bids as Array<{ ticker: string; shares: number; pricePerShare: number }>);
     case 'place_ask':
-      return executePlaceAsk(
-        userId,
-        args.ticker as string,
-        args.shares as number,
-        args.pricePerShare as number
-      );
+      return executePlaceAsk(userId, args.asks as Array<{ ticker: string; shares: number; pricePerShare: number }>);
     case 'fulfill_bid':
       return executeFulfillBid(userId, args.bidId as number);
     case 'fulfill_ask':
       return executeFulfillAsk(userId, args.askId as number);
     case 'cancel_bid':
-      return executeCancelBid(userId, args.bidId as number);
+      return executeCancelBid(userId, args.bidIds as number[]);
     case 'cancel_ask':
-      return executeCancelAsk(userId, args.askId as number);
+      return executeCancelAsk(userId, args.askIds as number[]);
     case 'get_my_open_orders':
       return executeGetMyOpenOrders(userId);
     default:
