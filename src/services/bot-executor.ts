@@ -3,7 +3,7 @@ import { toolDefinitions, executeTool } from './mcp-tools';
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3.2';
-const MAX_TOOL_CALLS = 15;
+const MAX_TOOL_CALLS = 10;
 
 interface OllamaMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
@@ -35,20 +35,23 @@ function buildSystemPrompt(username: string): string {
 
 Your portfolio total asset value is (cash + stock holdings).
 
+IMPORTANT: You have a maximum of ${MAX_TOOL_CALLS} tool calls per turn. After ${MAX_TOOL_CALLS} tool calls, your turn will automatically end and you will not be able to take any more actions until your next turn. Plan your actions carefully and prioritize the most important trades.
+
 You have access to tools that let you:
 - View your portfolio and other users' portfolios
 - See all companies and their current stock prices
 - View the order book (open buy/sell orders)
 - Read social posts for market sentiment
-- Place buy orders (bids) and sell orders (asks)
-- Fulfill other users' orders
-- Cancel your open orders
+- Place buy orders (bids) and sell orders (asks) - you can place multiple in one call
+- Fulfill other users' orders - you can fulfill multiple in one call
+- Cancel your open orders - you can cancel multiple in one call
 
 Key trading concepts:
 - BID: A buy order - you reserve cash to buy shares at a specified price
 - ASK: A sell order - you reserve shares to sell at a specified price
 - You can fulfill OTHER users' orders immediately (not your own)
-- Market price is determined by the last transaction`;
+- Market price is determined by the last transaction
+- Most trading actions accept arrays, so you can place/cancel/fulfill multiple orders in a single tool call to be more efficient`;
 }
 
 // Convert our tool definitions to Ollama format
