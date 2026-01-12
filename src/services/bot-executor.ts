@@ -23,6 +23,7 @@ interface OllamaResponse {
   message: {
     role: string;
     content: string;
+    thinking?: string;
     tool_calls?: OllamaToolCall[];
   };
   done: boolean;
@@ -91,7 +92,7 @@ async function logActivity(
   actionDetails: unknown,
   result: unknown
 ) {
-  await prisma.llmActivityLog.create({
+  const logEntry = await prisma.llmActivityLog.create({
     data: {
       userId,
       promptId,
@@ -100,6 +101,12 @@ async function logActivity(
       result: result as object,
     },
   });
+
+  // Debug log for assistant_message type
+  if (actionType === 'assistant_message') {
+    const contentLength = (result as { content?: string })?.content?.length || 0;
+    console.log(`[DB Log] Created assistant_message log (ID: ${logEntry.id}, content length: ${contentLength})`);
+  }
 }
 
 // Execute bot for a single user
@@ -139,8 +146,10 @@ export async function executeBot(userId: number, promptId: number, promptText: s
       messageCount++;
 
       // Log assistant message (skip initial ones if they're just echoing the prompt)
-      const assistantContent = response.message.content || '';
+      const assistantContent = response.message.thinking || '';
       if (assistantContent.trim().length > 0 && messageCount > 0) {
+        console.log(`[Bot ${user.username}] Logging thought process (${assistantContent.length} chars)`);
+
         // Log the message as an activity
         await logActivity(userId, promptId, 'assistant_message', {}, {
           content: assistantContent,
@@ -151,6 +160,8 @@ export async function executeBot(userId: number, promptId: number, promptText: s
           action: 'assistant_message',
           result: { content: assistantContent },
         });
+      } else if (messageCount > 0) {
+        console.log(`[Bot ${user.username}] No thinking content to log (thinking field: ${response.message.thinking ? 'present but empty' : 'not present'})`);
       }
 
       // If no tool calls, we're done

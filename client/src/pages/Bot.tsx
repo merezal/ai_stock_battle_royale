@@ -21,6 +21,7 @@ export function Bot() {
   const [promptText, setPromptText] = useState('');
   const [hasChanges, setHasChanges] = useState(false);
   const [initialLoaded, setInitialLoaded] = useState(false);
+  const [expandedMessages, setExpandedMessages] = useState<Set<number>>(new Set());
   const [runResult, setRunResult] = useState<{
     success?: boolean;
     error?: string;
@@ -112,6 +113,18 @@ export function Bot() {
   const handlePromptChange = (value: string) => {
     setPromptText(value);
     setHasChanges(value !== (botPrompt?.promptText || ''));
+  };
+
+  const toggleMessageExpanded = (logId: number) => {
+    setExpandedMessages((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(logId)) {
+        newSet.delete(logId);
+      } else {
+        newSet.add(logId);
+      }
+      return newSet;
+    });
   };
 
   return (
@@ -363,28 +376,46 @@ Focus on:
         ) : logs && logs.length > 0 ? (
           <div className="space-y-3">
             {logs.map((log) => {
-              // Display assistant messages differently
+              // Display assistant messages (thought process) differently
               if (log.actionType === 'assistant_message') {
                 const content = (log.result as { content?: string })?.content || '';
+                const isExpanded = expandedMessages.has(log.logId);
+                const lines = content.split('\n');
+                const shouldTruncate = lines.length > 4;
+                const displayContent = isExpanded || !shouldTruncate
+                  ? content
+                  : lines.slice(0, 4).join('\n');
+
                 return (
                   <div
                     key={log.logId}
-                    className="bg-gray-700/50 border border-gray-600 rounded-lg p-4"
+                    className="bg-gray-700/50 border border-gray-600 rounded-lg p-4 cursor-pointer hover:bg-gray-700/60 transition-colors"
+                    onClick={() => toggleMessageExpanded(log.logId)}
                   >
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex items-center space-x-2">
-                        <span className="text-purple-400 font-medium text-sm">AI Message</span>
+                        <span className="text-purple-400 font-medium text-sm">AI Thought Process</span>
+                        {shouldTruncate && (
+                          <span className="text-gray-500 text-xs">
+                            {isExpanded ? '(Click to collapse)' : '(Click to expand)'}
+                          </span>
+                        )}
                       </div>
                       <span className="text-gray-500 text-xs">
                         {new Date(log.timestamp).toLocaleString()}
                       </span>
                     </div>
-                    <p className="text-gray-200 text-sm whitespace-pre-wrap">{content}</p>
+                    <p className="text-gray-200 text-sm whitespace-pre-wrap">
+                      {displayContent}
+                      {!isExpanded && shouldTruncate && (
+                        <span className="text-gray-500">...</span>
+                      )}
+                    </p>
                   </div>
                 );
               }
 
-              // Display tool calls and other actions in table format
+              // Display tool calls and other actions
               return (
                 <div
                   key={log.logId}
