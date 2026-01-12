@@ -33,13 +33,13 @@ router.post('/found', async (req: Request, res: Response) => {
     }
 
     // Check if user already founded a company
-    const existingCompany = await prisma.company.findUnique({
-      where: { foundedByUserId: userId },
-    });
+    // const existingCompany = await prisma.company.findUnique({
+    //   where: { foundedByUserId: userId },
+    // });
 
-    if (existingCompany) {
-      return res.status(400).json({ error: 'You can only found one company' });
-    }
+    // if (existingCompany) {
+    //   return res.status(400).json({ error: 'You can only found one company' });
+    // }
 
     const availableCash = Number(user.account.cashBalance) - Number(user.account.reservedCash);
     if (investment > availableCash) {
