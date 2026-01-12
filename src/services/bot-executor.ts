@@ -3,7 +3,7 @@ import { toolDefinitions, executeTool } from './mcp-tools';
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3.2';
-const MAX_TOOL_CALLS = 10;
+const MAX_TOOL_CALLS = 15;
 
 interface OllamaMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';

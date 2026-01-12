@@ -152,30 +152,38 @@ export const toolDefinitions = [
   },
   {
     name: 'fulfill_bid',
-    description: 'Sell your shares to fulfill someone else\'s buy order. You receive cash immediately.',
+    description: 'Sell your shares to fulfill one or more buy orders. You receive cash immediately.',
     parameters: {
       type: 'object',
       properties: {
-        bidId: {
-          type: 'number',
-          description: 'The ID of the bid to fulfill',
+        bidIds: {
+          type: 'array',
+          description: 'Array of one or more bid IDs to fulfill',
+          items: {
+            type: 'number',
+          },
+          minItems: 1,
         },
       },
-      required: ['bidId'],
+      required: ['bidIds'],
     },
   },
   {
     name: 'fulfill_ask',
-    description: 'Buy shares from someone else\'s sell order. You pay the ask price immediately.',
+    description: 'Buy shares from one or more sell orders. You pay the ask price immediately.',
     parameters: {
       type: 'object',
       properties: {
-        askId: {
-          type: 'number',
-          description: 'The ID of the ask to fulfill',
+        askIds: {
+          type: 'array',
+          description: 'Array of one or more ask IDs to fulfill',
+          items: {
+            type: 'number',
+          },
+          minItems: 1,
         },
       },
-      required: ['askId'],
+      required: ['askIds'],
     },
   },
   {
@@ -686,137 +694,253 @@ export async function executePlaceAsk(userId: number, asks: Array<{ ticker: stri
   };
 }
 
-export async function executeFulfillBid(userId: number, bidId: number) {
-  const bid = await prisma.bid.findUnique({
-    where: { id: bidId },
+export async function executeFulfillBid(userId: number, bidIds: number[]) {
+  if (!bidIds || bidIds.length === 0) {
+    return { error: 'No bid IDs provided. Must provide array of one or more bid IDs.' };
+  }
+
+  console.log(`[executeFulfillBid] Attempting to fulfill ${bidIds.length} bid(s) for user ${userId}:`, bidIds);
+
+  // Fetch all bids
+  const bids = await prisma.bid.findMany({
+    where: { id: { in: bidIds } },
     include: { company: true },
   });
 
-  if (!bid) {
-    return { error: 'Bid not found' };
+  if (bids.length !== bidIds.length) {
+    const foundIds = bids.map(b => b.id);
+    const missingIds = bidIds.filter(id => !foundIds.includes(id));
+    console.log(`[executeFulfillBid] Bid(s) not found: ${missingIds.join(', ')}`);
+    return { error: `Bid(s) not found: ${missingIds.join(', ')}` };
   }
 
-  if (bid.status !== 'open') {
-    return { error: 'Bid is no longer open' };
+  // Validate all bids
+  for (const bid of bids) {
+    if (bid.status !== 'open') {
+      return { error: `Bid ${bid.id} is no longer open (status: ${bid.status})` };
+    }
+    if (bid.userId === userId) {
+      return { error: `Cannot fulfill your own bid (bid ${bid.id})` };
+    }
   }
 
-  if (bid.userId === userId) {
-    return { error: 'Cannot fulfill your own bid' };
+  // Check if user has enough shares for all bids (grouped by company)
+  const sharesByCompany = new Map<number, bigint>();
+  for (const bid of bids) {
+    const current = sharesByCompany.get(bid.companyId) || BigInt(0);
+    sharesByCompany.set(bid.companyId, current + bid.sharesRequested);
   }
 
-  const holding = await prisma.stockHolding.findUnique({
+  // Get current holdings for all companies
+  const holdings = await prisma.stockHolding.findMany({
     where: {
-      userId_companyId: { userId, companyId: bid.companyId },
+      userId,
+      companyId: { in: Array.from(sharesByCompany.keys()) },
     },
   });
 
-  const availableShares = holding
-    ? Number(holding.sharesOwned) - Number(holding.reservedShares)
-    : 0;
+  const holdingsByCompany = new Map(holdings.map(h => [h.companyId, h]));
 
-  if (Number(bid.sharesRequested) > availableShares) {
-    return { error: `You don't own enough shares. Need ${bid.sharesRequested}, have ${availableShares}.` };
+  // Validate sufficient shares for each company
+  for (const [companyId, sharesNeeded] of sharesByCompany.entries()) {
+    const holding = holdingsByCompany.get(companyId);
+    const availableShares = holding
+      ? holding.sharesOwned - holding.reservedShares
+      : BigInt(0);
+
+    if (sharesNeeded > availableShares) {
+      const company = bids.find(b => b.companyId === companyId)?.company;
+      return { error: `Insufficient shares of ${company?.tickerSymbol || 'company'}. Need ${sharesNeeded}, have ${availableShares} available.` };
+    }
   }
 
-  const transaction = await prisma.$transaction(async (tx) => {
-    const updatedSellerHolding = await tx.stockHolding.update({
-      where: {
-        userId_companyId: { userId, companyId: bid.companyId },
-      },
-      data: { sharesOwned: { decrement: bid.sharesRequested } },
+  console.log(`[executeFulfillBid] Validation passed. Proceeding with transaction.`);
+
+  // Execute all fulfillments in a single transaction
+  const results = await prisma.$transaction(async (tx) => {
+    // Double-check all bids are still open
+    const currentBids = await tx.bid.findMany({
+      where: { id: { in: bidIds } },
+      select: { id: true, status: true },
     });
 
-    // Delete holding if shares reached 0
-    if (Number(updatedSellerHolding.sharesOwned) === 0) {
-      await tx.stockHolding.delete({
+    for (const currentBid of currentBids) {
+      if (currentBid.status !== 'open') {
+        throw new Error(`Bid ${currentBid.id} was already fulfilled or cancelled`);
+      }
+    }
+
+    const transactions = [];
+    const sellerShareChanges = new Map<number, bigint>(); // companyId -> shares to subtract
+    const buyerShareChanges = new Map<string, { companyId: number; buyerId: number; shares: bigint }>(); // key: userId-companyId
+    let totalCashReceived = 0;
+
+    // Calculate all changes first
+    for (const bid of bids) {
+      // Track seller share changes
+      const currentSellerShares = sellerShareChanges.get(bid.companyId) || BigInt(0);
+      sellerShareChanges.set(bid.companyId, currentSellerShares + bid.sharesRequested);
+
+      // Track buyer share changes
+      const buyerKey = `${bid.userId}-${bid.companyId}`;
+      const currentBuyerData = buyerShareChanges.get(buyerKey);
+      if (currentBuyerData) {
+        currentBuyerData.shares += bid.sharesRequested;
+      } else {
+        buyerShareChanges.set(buyerKey, {
+          companyId: bid.companyId,
+          buyerId: bid.userId,
+          shares: bid.sharesRequested,
+        });
+      }
+
+      totalCashReceived += Number(bid.totalCost);
+    }
+
+    // Apply seller share changes
+    for (const [companyId, sharesToSubtract] of sellerShareChanges.entries()) {
+      const updatedHolding = await tx.stockHolding.update({
         where: {
-          userId_companyId: { userId, companyId: bid.companyId },
+          userId_companyId: { userId, companyId },
         },
+        data: { sharesOwned: { decrement: sharesToSubtract } },
+      });
+
+      // Delete holding if shares reached 0
+      if (updatedHolding.sharesOwned === BigInt(0)) {
+        await tx.stockHolding.delete({
+          where: {
+            userId_companyId: { userId, companyId },
+          },
+        });
+      }
+    }
+
+    // Apply buyer share changes
+    for (const [, data] of buyerShareChanges.entries()) {
+      await tx.stockHolding.upsert({
+        where: {
+          userId_companyId: { userId: data.buyerId, companyId: data.companyId },
+        },
+        create: {
+          userId: data.buyerId,
+          companyId: data.companyId,
+          sharesOwned: data.shares,
+          reservedShares: 0,
+        },
+        update: { sharesOwned: { increment: data.shares } },
       });
     }
 
-    await tx.stockHolding.upsert({
-      where: {
-        userId_companyId: { userId: bid.userId, companyId: bid.companyId },
-      },
-      create: {
-        userId: bid.userId,
-        companyId: bid.companyId,
-        sharesOwned: bid.sharesRequested,
-        reservedShares: 0,
-      },
-      update: { sharesOwned: { increment: bid.sharesRequested } },
-    });
+    // Update accounts for each buyer
+    const buyersProcessed = new Set<number>();
+    for (const bid of bids) {
+      if (!buyersProcessed.has(bid.userId)) {
+        const totalCostForBuyer = bids
+          .filter(b => b.userId === bid.userId)
+          .reduce((sum, b) => sum + Number(b.totalCost), 0);
 
-    await tx.account.update({
-      where: { userId: bid.userId },
-      data: {
-        cashBalance: { decrement: Number(bid.totalCost) },
-        reservedCash: { decrement: Number(bid.totalCost) },
-      },
-    });
+        await tx.account.update({
+          where: { userId: bid.userId },
+          data: {
+            cashBalance: { decrement: totalCostForBuyer },
+            reservedCash: { decrement: totalCostForBuyer },
+          },
+        });
 
+        buyersProcessed.add(bid.userId);
+      }
+    }
+
+    // Update seller account
     await tx.account.update({
       where: { userId },
-      data: { cashBalance: { increment: Number(bid.totalCost) } },
+      data: { cashBalance: { increment: totalCashReceived } },
     });
 
-    await tx.bid.update({
-      where: { id: bidId },
+    // Mark all bids as fulfilled
+    await tx.bid.updateMany({
+      where: { id: { in: bidIds } },
       data: { status: 'fulfilled' },
     });
 
-    // Get company's current split multiplier
-    const company = await tx.company.findUnique({
-      where: { id: bid.companyId },
-      select: { splitMultiplier: true },
-    });
+    // Create transactions for each bid
+    for (const bid of bids) {
+      const company = await tx.company.findUnique({
+        where: { id: bid.companyId },
+        select: { splitMultiplier: true },
+      });
 
-    return tx.transaction.create({
-      data: {
-        buyerId: bid.userId,
-        sellerId: userId,
-        companyId: bid.companyId,
-        sharesTraded: bid.sharesRequested,
-        pricePerShare: bid.pricePerShare,
-        totalAmount: bid.totalCost,
+      const transaction = await tx.transaction.create({
+        data: {
+          buyerId: bid.userId,
+          sellerId: userId,
+          companyId: bid.companyId,
+          sharesTraded: bid.sharesRequested,
+          pricePerShare: bid.pricePerShare,
+          totalAmount: bid.totalCost,
+          bidId: bid.id,
+          transactionType: 'bid_fulfillment',
+          splitMultiplier: company?.splitMultiplier ?? 1.0,
+        },
+      });
+
+      transactions.push({
+        transactionId: transaction.id,
         bidId: bid.id,
-        transactionType: 'bid_fulfillment',
-        splitMultiplier: company?.splitMultiplier ?? 1.0,
-      },
-    });
+        ticker: bid.company.tickerSymbol,
+        sharesSold: Number(bid.sharesRequested),
+        pricePerShare: Number(bid.pricePerShare),
+        cashReceived: Number(bid.totalCost),
+      });
+    }
+
+    return { transactions, totalCashReceived };
   });
+
+  console.log(`[executeFulfillBid] Successfully fulfilled ${bidIds.length} bid(s). Total cash: $${results.totalCashReceived}`);
 
   return {
     success: true,
-    transactionId: transaction.id,
-    ticker: bid.company.tickerSymbol,
-    sharesSold: Number(transaction.sharesTraded),
-    pricePerShare: Number(transaction.pricePerShare),
-    cashReceived: Number(transaction.totalAmount),
+    fulfillments: results.transactions,
+    totalCashReceived: results.totalCashReceived,
   };
 }
 
-export async function executeFulfillAsk(userId: number, askId: number) {
-  const ask = await prisma.ask.findUnique({
-    where: { id: askId },
+export async function executeFulfillAsk(userId: number, askIds: number[]) {
+  if (!askIds || askIds.length === 0) {
+    return { error: 'No ask IDs provided. Must provide array of one or more ask IDs.' };
+  }
+
+  console.log(`[executeFulfillAsk] Attempting to fulfill ${askIds.length} ask(s) for user ${userId}:`, askIds);
+
+  // Fetch all asks
+  const asks = await prisma.ask.findMany({
+    where: { id: { in: askIds } },
     include: { company: true },
   });
 
-  if (!ask) {
-    return { error: 'Ask not found' };
+  if (asks.length !== askIds.length) {
+    const foundIds = asks.map(a => a.id);
+    const missingIds = askIds.filter(id => !foundIds.includes(id));
+    console.log(`[executeFulfillAsk] Ask(s) not found: ${missingIds.join(', ')}`);
+    return { error: `Ask(s) not found: ${missingIds.join(', ')}` };
   }
 
-  if (ask.status !== 'open') {
-    return { error: 'Ask is no longer open' };
+  // Validate all asks
+  for (const ask of asks) {
+    if (ask.status !== 'open') {
+      return { error: `Ask ${ask.id} is no longer open (status: ${ask.status})` };
+    }
+    if (ask.userId === userId) {
+      return { error: `Cannot fulfill your own ask (ask ${ask.id})` };
+    }
   }
 
-  if (ask.userId === userId) {
-    return { error: 'Cannot fulfill your own ask' };
-  }
+  // Calculate total cost
+  const totalCost = asks.reduce((sum, ask) => sum + Number(ask.sharesOffered) * Number(ask.pricePerShare), 0);
 
-  const totalCost = Number(ask.sharesOffered) * Number(ask.pricePerShare);
-
+  // Check if buyer has enough cash
   const account = await prisma.account.findUnique({
     where: { userId },
   });
@@ -830,82 +954,152 @@ export async function executeFulfillAsk(userId: number, askId: number) {
     return { error: `Insufficient funds. Need $${totalCost}, have $${availableCash} available.` };
   }
 
-  const transaction = await prisma.$transaction(async (tx) => {
-    const updatedSellerHolding = await tx.stockHolding.update({
-      where: {
-        userId_companyId: { userId: ask.userId, companyId: ask.companyId },
-      },
-      data: {
-        sharesOwned: { decrement: ask.sharesOffered },
-        reservedShares: { decrement: ask.sharesOffered },
-      },
+  console.log(`[executeFulfillAsk] Validation passed. Total cost: $${totalCost}, Available cash: $${availableCash}`);
+
+  // Execute all fulfillments in a single transaction
+  const results = await prisma.$transaction(async (tx) => {
+    // Double-check all asks are still open
+    const currentAsks = await tx.ask.findMany({
+      where: { id: { in: askIds } },
+      select: { id: true, status: true },
     });
 
-    // Delete holding if shares reached 0
-    if (Number(updatedSellerHolding.sharesOwned) === 0) {
-      await tx.stockHolding.delete({
+    for (const currentAsk of currentAsks) {
+      if (currentAsk.status !== 'open') {
+        throw new Error(`Ask ${currentAsk.id} was already fulfilled or cancelled`);
+      }
+    }
+
+    const transactions = [];
+    const sellerShareChanges = new Map<string, { companyId: number; sellerId: number; shares: bigint }>(); // key: userId-companyId
+    const buyerShareChanges = new Map<number, bigint>(); // companyId -> shares to add
+    const sellerCashChanges = new Map<number, number>(); // sellerId -> cash to add
+
+    // Calculate all changes first
+    for (const ask of asks) {
+      // Track seller share changes
+      const sellerKey = `${ask.userId}-${ask.companyId}`;
+      const currentSellerData = sellerShareChanges.get(sellerKey);
+      if (currentSellerData) {
+        currentSellerData.shares += ask.sharesOffered;
+      } else {
+        sellerShareChanges.set(sellerKey, {
+          companyId: ask.companyId,
+          sellerId: ask.userId,
+          shares: ask.sharesOffered,
+        });
+      }
+
+      // Track buyer share changes
+      const currentBuyerShares = buyerShareChanges.get(ask.companyId) || BigInt(0);
+      buyerShareChanges.set(ask.companyId, currentBuyerShares + ask.sharesOffered);
+
+      // Track seller cash changes
+      const askCost = Number(ask.sharesOffered) * Number(ask.pricePerShare);
+      const currentSellerCash = sellerCashChanges.get(ask.userId) || 0;
+      sellerCashChanges.set(ask.userId, currentSellerCash + askCost);
+    }
+
+    // Apply seller share changes
+    for (const [, data] of sellerShareChanges.entries()) {
+      const updatedHolding = await tx.stockHolding.update({
         where: {
-          userId_companyId: { userId: ask.userId, companyId: ask.companyId },
+          userId_companyId: { userId: data.sellerId, companyId: data.companyId },
         },
+        data: {
+          sharesOwned: { decrement: data.shares },
+          reservedShares: { decrement: data.shares },
+        },
+      });
+
+      // Delete holding if shares reached 0
+      if (updatedHolding.sharesOwned === BigInt(0)) {
+        await tx.stockHolding.delete({
+          where: {
+            userId_companyId: { userId: data.sellerId, companyId: data.companyId },
+          },
+        });
+      }
+    }
+
+    // Apply buyer share changes
+    for (const [companyId, sharesToAdd] of buyerShareChanges.entries()) {
+      await tx.stockHolding.upsert({
+        where: {
+          userId_companyId: { userId, companyId },
+        },
+        create: {
+          userId,
+          companyId,
+          sharesOwned: sharesToAdd,
+          reservedShares: 0,
+        },
+        update: { sharesOwned: { increment: sharesToAdd } },
       });
     }
 
-    await tx.stockHolding.upsert({
-      where: {
-        userId_companyId: { userId, companyId: ask.companyId },
-      },
-      create: {
-        userId,
-        companyId: ask.companyId,
-        sharesOwned: ask.sharesOffered,
-        reservedShares: 0,
-      },
-      update: { sharesOwned: { increment: ask.sharesOffered } },
-    });
-
+    // Update buyer account (subtract total cost)
     await tx.account.update({
       where: { userId },
       data: { cashBalance: { decrement: totalCost } },
     });
 
-    await tx.account.update({
-      where: { userId: ask.userId },
-      data: { cashBalance: { increment: totalCost } },
-    });
+    // Update seller accounts (add cash for each seller)
+    for (const [sellerId, cashToAdd] of sellerCashChanges.entries()) {
+      await tx.account.update({
+        where: { userId: sellerId },
+        data: { cashBalance: { increment: cashToAdd } },
+      });
+    }
 
-    await tx.ask.update({
-      where: { id: askId },
+    // Mark all asks as fulfilled
+    await tx.ask.updateMany({
+      where: { id: { in: askIds } },
       data: { status: 'fulfilled' },
     });
 
-    // Get company's current split multiplier
-    const company = await tx.company.findUnique({
-      where: { id: ask.companyId },
-      select: { splitMultiplier: true },
-    });
+    // Create transactions for each ask
+    for (const ask of asks) {
+      const company = await tx.company.findUnique({
+        where: { id: ask.companyId },
+        select: { splitMultiplier: true },
+      });
 
-    return tx.transaction.create({
-      data: {
-        buyerId: userId,
-        sellerId: ask.userId,
-        companyId: ask.companyId,
-        sharesTraded: ask.sharesOffered,
-        pricePerShare: ask.pricePerShare,
-        totalAmount: totalCost,
+      const askCost = Number(ask.sharesOffered) * Number(ask.pricePerShare);
+
+      const transaction = await tx.transaction.create({
+        data: {
+          buyerId: userId,
+          sellerId: ask.userId,
+          companyId: ask.companyId,
+          sharesTraded: ask.sharesOffered,
+          pricePerShare: ask.pricePerShare,
+          totalAmount: askCost,
+          askId: ask.id,
+          transactionType: 'ask_fulfillment',
+          splitMultiplier: company?.splitMultiplier ?? 1.0,
+        },
+      });
+
+      transactions.push({
+        transactionId: transaction.id,
         askId: ask.id,
-        transactionType: 'ask_fulfillment',
-        splitMultiplier: company?.splitMultiplier ?? 1.0,
-      },
-    });
+        ticker: ask.company.tickerSymbol,
+        sharesBought: Number(ask.sharesOffered),
+        pricePerShare: Number(ask.pricePerShare),
+        cashSpent: askCost,
+      });
+    }
+
+    return { transactions, totalCost };
   });
+
+  console.log(`[executeFulfillAsk] Successfully fulfilled ${askIds.length} ask(s). Total cost: $${results.totalCost}`);
 
   return {
     success: true,
-    transactionId: transaction.id,
-    ticker: ask.company.tickerSymbol,
-    sharesBought: Number(transaction.sharesTraded),
-    pricePerShare: Number(transaction.pricePerShare),
-    cashSpent: Number(transaction.totalAmount),
+    fulfillments: results.transactions,
+    totalCashSpent: results.totalCost,
   };
 }
 
@@ -1065,6 +1259,8 @@ export async function executeGetMyOpenOrders(userId: number) {
 
 // Main tool executor
 export async function executeTool(userId: number, toolName: string, args: Record<string, unknown>) {
+  console.log(`[executeTool] User ${userId} calling ${toolName} with args:`, JSON.stringify(args));
+
   switch (toolName) {
     case 'get_my_portfolio':
       return executeGetMyPortfolio(userId);
@@ -1089,9 +1285,9 @@ export async function executeTool(userId: number, toolName: string, args: Record
     case 'place_ask':
       return executePlaceAsk(userId, args.asks as Array<{ ticker: string; shares: number; pricePerShare: number }>);
     case 'fulfill_bid':
-      return executeFulfillBid(userId, args.bidId as number);
+      return executeFulfillBid(userId, args.bidIds as number[]);
     case 'fulfill_ask':
-      return executeFulfillAsk(userId, args.askId as number);
+      return executeFulfillAsk(userId, args.askIds as number[]);
     case 'cancel_bid':
       return executeCancelBid(userId, args.bidIds as number[]);
     case 'cancel_ask':
