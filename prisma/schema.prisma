@@ -48,6 +48,7 @@ model Company {
   foundedByUserId  Int?     @unique @map("founded_by_user_id")
   foundingCost     Decimal? @map("founding_cost") @db.Decimal(15, 2)
   totalSharesIssued BigInt   @map("total_shares_issued")
+  splitMultiplier  Decimal  @default(1.0) @map("split_multiplier") @db.Decimal(15, 8)
   createdAt        DateTime @default(now()) @map("created_at")
 
   founder       User?          @relation("FoundedCompanies", fields: [foundedByUserId], references: [id], onDelete: SetNull)
@@ -131,6 +132,7 @@ model Transaction {
   askId           Int?             @map("ask_id")
   timestamp       DateTime         @default(now())
   transactionType TransactionType? @map("transaction_type")
+  splitMultiplier Decimal          @default(1.0) @map("split_multiplier") @db.Decimal(15, 8)
 
   buyer   User     @relation("BuyerTransactions", fields: [buyerId], references: [id], onDelete: Cascade)
   seller  User     @relation("SellerTransactions", fields: [sellerId], references: [id], onDelete: Cascade)

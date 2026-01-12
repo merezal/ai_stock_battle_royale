@@ -1,17 +1,41 @@
+import { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { getCompany, getOrderBook, getTransactions } from '../api/client';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getCompany, getOrderBook, getTransactions, splitStock, getPortfolioByUsername } from '../api/client';
 import { UserLink } from '../components/UserLink';
 import { PriceChart } from '../components/PriceChart';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 
 export function CompanyDetail() {
   const { ticker } = useParams<{ ticker: string }>();
+  const { userId, user } = useCurrentUser();
+  const queryClient = useQueryClient();
+  const [splitError, setSplitError] = useState('');
 
   const { data: company, isLoading } = useQuery({
     queryKey: ['company', ticker],
     queryFn: () => getCompany(ticker!),
     enabled: !!ticker,
     refetchInterval: 10000,
+  });
+
+  const { data: userPortfolio } = useQuery({
+    queryKey: ['portfolio', 'username', user?.username],
+    queryFn: () => getPortfolioByUsername(user!.username),
+    enabled: !!user?.username,
+  });
+
+  const splitMutation = useMutation({
+    mutationFn: () => splitStock(userId!, ticker!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['company', ticker] });
+      queryClient.invalidateQueries({ queryKey: ['companies'] });
+      queryClient.invalidateQueries({ queryKey: ['portfolio'] });
+      queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+      queryClient.invalidateQueries({ queryKey: ['orderbook'] });
+      setSplitError('');
+    },
+    onError: (err: Error) => setSplitError(err.message),
   });
 
   const { data: orderBook } = useQuery({
@@ -38,6 +62,13 @@ export function CompanyDetail() {
 
   const marketCap = company.currentPrice * parseInt(company.totalSharesIssued);
 
+  // Check if current user is majority shareholder
+  const userHolding = userPortfolio?.holdings.find(h => h.ticker === ticker?.toUpperCase());
+  const userShares = userHolding?.sharesOwned ?? 0;
+  const totalShares = parseInt(company.totalSharesIssued);
+  const ownershipPercent = totalShares > 0 ? (userShares / totalShares) * 100 : 0;
+  const isMajorityShareholder = ownershipPercent > 50;
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -56,6 +87,16 @@ export function CompanyDetail() {
               ${company.currentPrice.toLocaleString()}
             </p>
             <p className="text-gray-400 text-sm">per share</p>
+            {isMajorityShareholder && (
+              <button
+                onClick={() => splitMutation.mutate()}
+                disabled={splitMutation.isPending}
+                className="mt-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50"
+              >
+                {splitMutation.isPending ? 'Splitting...' : '2:1 Stock Split'}
+              </button>
+            )}
+            {splitError && <p className="text-red-400 text-xs mt-1">{splitError}</p>}
           </div>
         </div>
 

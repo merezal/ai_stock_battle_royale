@@ -123,8 +123,9 @@ router.get('/', async (_req: Request, res: Response) => {
 
     const result = companies.map(c => {
       const lastTransaction = c.transactions[0];
+      // Price adjusted for splits: transactionPrice * (company.splitMultiplier / transaction.splitMultiplier)
       const currentPrice = lastTransaction
-        ? Number(lastTransaction.pricePerShare)
+        ? Number(lastTransaction.pricePerShare) * (Number(c.splitMultiplier) / Number(lastTransaction.splitMultiplier))
         : Number(c.foundingCost) / Number(c.totalSharesIssued);
 
       return {
@@ -176,9 +177,13 @@ router.get('/:ticker', async (req: Request<{ ticker: string }>, res: Response) =
     }
 
     const lastTransaction = company.transactions[0];
+    // Price adjusted for splits: transactionPrice * (company.splitMultiplier / transaction.splitMultiplier)
     const currentPrice = lastTransaction
-      ? Number(lastTransaction.pricePerShare)
+      ? Number(lastTransaction.pricePerShare) * (Number(company.splitMultiplier) / Number(lastTransaction.splitMultiplier))
       : Number(company.foundingCost) / Number(company.totalSharesIssued);
+
+    // Also include split-adjusted prices for recent transactions
+    const companySplitMultiplier = Number(company.splitMultiplier);
 
     return res.json({
       ticker: company.tickerSymbol,
@@ -187,8 +192,9 @@ router.get('/:ticker', async (req: Request<{ ticker: string }>, res: Response) =
       lastTradeTime: lastTransaction?.timestamp || null,
       totalSharesIssued: company.totalSharesIssued.toString(),
       foundedBy: company.founder?.username || null,
+      splitMultiplier: companySplitMultiplier,
       recentTransactions: company.transactions.map(t => ({
-        price: Number(t.pricePerShare),
+        price: Number(t.pricePerShare) * (companySplitMultiplier / Number(t.splitMultiplier)),
         shares: t.sharesTraded.toString(),
         buyer: t.buyer.username,
         seller: t.seller.username,
@@ -204,6 +210,98 @@ router.get('/:ticker', async (req: Request<{ ticker: string }>, res: Response) =
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: 'Failed to fetch company' });
+  }
+});
+
+// Stock split - only available to majority shareholder
+router.post('/:ticker/split', async (req: Request<{ ticker: string }>, res: Response) => {
+  try {
+    const ticker = req.params.ticker.toUpperCase();
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+
+    const company = await prisma.company.findUnique({
+      where: { tickerSymbol: ticker },
+      include: {
+        stockHoldings: true,
+      },
+    });
+
+    if (!company) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+
+    // Check if user is majority shareholder (> 50% of shares)
+    const userHolding = company.stockHoldings.find(h => h.userId === userId);
+    if (!userHolding) {
+      return res.status(403).json({ error: 'You do not own any shares of this company' });
+    }
+
+    const userShares = Number(userHolding.sharesOwned);
+    const totalShares = Number(company.totalSharesIssued);
+    const ownershipPercent = (userShares / totalShares) * 100;
+
+    if (ownershipPercent <= 50) {
+      return res.status(403).json({
+        error: `Only the majority shareholder can split the stock. You own ${ownershipPercent.toFixed(1)}% (need >50%)`,
+      });
+    }
+
+    // Perform the split in a transaction
+    const result = await prisma.$transaction(async (tx) => {
+      // Double all stockholdings for this company
+      await tx.stockHolding.updateMany({
+        where: { companyId: company.id },
+        data: {
+          sharesOwned: { multiply: 2 },
+          reservedShares: { multiply: 2 },
+        },
+      });
+
+      // Double total shares and halve the split multiplier
+      const newSplitMultiplier = Number(company.splitMultiplier) * 0.5;
+      const updatedCompany = await tx.company.update({
+        where: { id: company.id },
+        data: {
+          totalSharesIssued: { multiply: 2 },
+          splitMultiplier: newSplitMultiplier,
+        },
+      });
+
+      // Update open bids: double shares requested, halve price per share (total cost stays same)
+      await tx.bid.updateMany({
+        where: { companyId: company.id, status: 'open' },
+        data: {
+          sharesRequested: { multiply: 2 },
+          pricePerShare: { divide: 2 },
+        },
+      });
+
+      // Update open asks: double shares offered, halve price per share
+      await tx.ask.updateMany({
+        where: { companyId: company.id, status: 'open' },
+        data: {
+          sharesOffered: { multiply: 2 },
+          pricePerShare: { divide: 2 },
+        },
+      });
+
+      return updatedCompany;
+    });
+
+    return res.json({
+      success: true,
+      message: `Stock split successful! All shares have been doubled.`,
+      ticker: result.tickerSymbol,
+      newTotalShares: result.totalSharesIssued.toString(),
+      splitMultiplier: Number(result.splitMultiplier),
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: 'Failed to split stock' });
   }
 });
 

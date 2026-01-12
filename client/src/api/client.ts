@@ -77,6 +77,16 @@ export async function getCompany(ticker: string): Promise<Company> {
   return fetchJSON(`${API_BASE}/companies/${ticker}`);
 }
 
+export async function splitStock(
+  userId: number,
+  ticker: string
+): Promise<{ success: boolean; message: string; newTotalShares: string; splitMultiplier: number }> {
+  return fetchJSON(`${API_BASE}/companies/${ticker}/split`, {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  });
+}
+
 // Trading
 export async function placeBid(
   userId: number,

@@ -286,6 +286,12 @@ router.post('/bids/:bidId/fulfill', async (req: Request<{ bidId: string }>, res:
         data: { status: 'fulfilled' },
       });
 
+      // Get company's current split multiplier
+      const company = await tx.company.findUnique({
+        where: { id: bid.companyId },
+        select: { splitMultiplier: true },
+      });
+
       // Create transaction record
       return tx.transaction.create({
         data: {
@@ -297,6 +303,7 @@ router.post('/bids/:bidId/fulfill', async (req: Request<{ bidId: string }>, res:
           totalAmount: bid.totalCost,
           bidId: bid.id,
           transactionType: 'bid_fulfillment',
+          splitMultiplier: company?.splitMultiplier ?? 1.0,
         },
         include: {
           buyer: { select: { username: true } },
@@ -433,6 +440,12 @@ router.post('/asks/:askId/fulfill', async (req: Request<{ askId: string }>, res:
         data: { status: 'fulfilled' },
       });
 
+      // Get company's current split multiplier
+      const company = await tx.company.findUnique({
+        where: { id: ask.companyId },
+        select: { splitMultiplier: true },
+      });
+
       // Create transaction record
       return tx.transaction.create({
         data: {
@@ -444,6 +457,7 @@ router.post('/asks/:askId/fulfill', async (req: Request<{ askId: string }>, res:
           totalAmount: totalCost,
           askId: ask.id,
           transactionType: 'ask_fulfillment',
+          splitMultiplier: company?.splitMultiplier ?? 1.0,
         },
         include: {
           seller: { select: { username: true } },

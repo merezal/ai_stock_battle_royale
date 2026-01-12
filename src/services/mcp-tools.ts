@@ -213,15 +213,23 @@ export const toolDefinitions = [
   },
 ];
 
-// Helper to get current price for a company
-async function getCurrentPrice(companyId: number, foundingCost: number | null, totalShares: bigint): Promise<number> {
+// Helper to get current price for a company (adjusted for splits)
+async function getCurrentPrice(companyId: number, foundingCost: number | null, totalShares: bigint, companySplitMultiplier?: number): Promise<number> {
+  const company = await prisma.company.findUnique({
+    where: { id: companyId },
+    select: { splitMultiplier: true },
+  });
+
+  const splitMultiplier = companySplitMultiplier ?? Number(company?.splitMultiplier ?? 1);
+
   const lastTransaction = await prisma.transaction.findFirst({
     where: { companyId },
     orderBy: { timestamp: 'desc' },
   });
 
   if (lastTransaction) {
-    return Number(lastTransaction.pricePerShare);
+    // Price adjusted for splits: transactionPrice * (company.splitMultiplier / transaction.splitMultiplier)
+    return Number(lastTransaction.pricePerShare) * (splitMultiplier / Number(lastTransaction.splitMultiplier));
   }
 
   // No transactions yet, use founding price
@@ -680,6 +688,12 @@ export async function executeFulfillBid(userId: number, bidId: number) {
       data: { status: 'fulfilled' },
     });
 
+    // Get company's current split multiplier
+    const company = await tx.company.findUnique({
+      where: { id: bid.companyId },
+      select: { splitMultiplier: true },
+    });
+
     return tx.transaction.create({
       data: {
         buyerId: bid.userId,
@@ -690,6 +704,7 @@ export async function executeFulfillBid(userId: number, bidId: number) {
         totalAmount: bid.totalCost,
         bidId: bid.id,
         transactionType: 'bid_fulfillment',
+        splitMultiplier: company?.splitMultiplier ?? 1.0,
       },
     });
   });
@@ -785,6 +800,12 @@ export async function executeFulfillAsk(userId: number, askId: number) {
       data: { status: 'fulfilled' },
     });
 
+    // Get company's current split multiplier
+    const company = await tx.company.findUnique({
+      where: { id: ask.companyId },
+      select: { splitMultiplier: true },
+    });
+
     return tx.transaction.create({
       data: {
         buyerId: userId,
@@ -795,6 +816,7 @@ export async function executeFulfillAsk(userId: number, askId: number) {
         totalAmount: totalCost,
         askId: ask.id,
         transactionType: 'ask_fulfillment',
+        splitMultiplier: company?.splitMultiplier ?? 1.0,
       },
     });
   });

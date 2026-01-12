@@ -81,8 +81,10 @@ router.get('/by-username/:username/portfolio', async (req: Request<{ username: s
       .filter(h => Number(h.sharesOwned) > 0)
       .map(h => {
         const lastTransaction = h.company.transactions[0];
+        // Price adjusted for splits: transactionPrice * (company.splitMultiplier / transaction.splitMultiplier)
+        const companySplitMultiplier = Number(h.company.splitMultiplier);
         const currentPrice = lastTransaction
-          ? Number(lastTransaction.pricePerShare)
+          ? Number(lastTransaction.pricePerShare) * (companySplitMultiplier / Number(lastTransaction.splitMultiplier))
           : Number(h.company.foundingCost) / Number(h.company.totalSharesIssued);
         const positionValue = Number(h.sharesOwned) * currentPrice;
         stockValue += positionValue;
@@ -199,8 +201,10 @@ router.get('/:id/portfolio', async (req: Request<{ id: string }>, res: Response)
       .filter(h => Number(h.sharesOwned) > 0)
       .map(h => {
         const lastTransaction = h.company.transactions[0];
+        // Price adjusted for splits: transactionPrice * (company.splitMultiplier / transaction.splitMultiplier)
+        const companySplitMultiplier = Number(h.company.splitMultiplier);
         const currentPrice = lastTransaction
-          ? Number(lastTransaction.pricePerShare)
+          ? Number(lastTransaction.pricePerShare) * (companySplitMultiplier / Number(lastTransaction.splitMultiplier))
           : Number(h.company.foundingCost) / Number(h.company.totalSharesIssued);
         const positionValue = Number(h.sharesOwned) * currentPrice;
         stockValue += positionValue;
@@ -262,8 +266,10 @@ router.get('/', async (_req: Request, res: Response) => {
         .filter(h => Number(h.sharesOwned) > 0)
         .forEach(h => {
           const lastTransaction = h.company.transactions[0];
+          // Price adjusted for splits: transactionPrice * (company.splitMultiplier / transaction.splitMultiplier)
+          const companySplitMultiplier = Number(h.company.splitMultiplier);
           const currentPrice = lastTransaction
-            ? Number(lastTransaction.pricePerShare)
+            ? Number(lastTransaction.pricePerShare) * (companySplitMultiplier / Number(lastTransaction.splitMultiplier))
             : Number(h.company.foundingCost) / Number(h.company.totalSharesIssued);
           stockValue += Number(h.sharesOwned) * currentPrice;
         });
@@ -387,8 +393,10 @@ router.get('/by-username/:username/portfolio-history', async (req: Request<{ use
       let currentStockValue = 0;
       for (const h of currentUser.stockHoldings.filter(h => Number(h.sharesOwned) > 0)) {
         const lastTx = h.company.transactions[0];
+        // Price adjusted for splits: transactionPrice * (company.splitMultiplier / transaction.splitMultiplier)
+        const companySplitMultiplier = Number(h.company.splitMultiplier);
         const price = lastTx
-          ? Number(lastTx.pricePerShare)
+          ? Number(lastTx.pricePerShare) * (companySplitMultiplier / Number(lastTx.splitMultiplier))
           : Number(h.company.foundingCost) / Number(h.company.totalSharesIssued);
         currentStockValue += Number(h.sharesOwned) * price;
       }
