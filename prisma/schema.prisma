@@ -29,12 +29,13 @@ model User {
 }
 
 model Account {
-  id              Int      @id @default(autoincrement()) @map("account_id")
-  userId          Int      @unique @map("user_id")
-  cashBalance     Decimal  @default(100000.00) @map("cash_balance") @db.Decimal(15, 2)
-  reservedCash    Decimal  @default(0.00) @map("reserved_cash") @db.Decimal(15, 2)
-  totalAssetValue Decimal  @default(100000.00) @map("total_asset_value") @db.Decimal(15, 2)
-  lastUpdated     DateTime @default(now()) @map("last_updated")
+  id                 Int       @id @default(autoincrement()) @map("account_id")
+  userId             Int       @unique @map("user_id")
+  cashBalance        Decimal   @default(100000.00) @map("cash_balance") @db.Decimal(15, 2)
+  reservedCash       Decimal   @default(0.00) @map("reserved_cash") @db.Decimal(15, 2)
+  totalAssetValue    Decimal   @default(100000.00) @map("total_asset_value") @db.Decimal(15, 2)
+  lastUpdated        DateTime  @default(now()) @map("last_updated")
+  lastManualTradeAt  DateTime? @map("last_manual_trade_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

@@ -41,6 +41,21 @@ router.post('/bids', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Company not found' });
     }
 
+    // Check 30-minute cooldown on manual trades
+    if (user.account.lastManualTradeAt) {
+      const timeSinceLastTrade = Date.now() - user.account.lastManualTradeAt.getTime();
+      const cooldownMs = 30 * 60 * 1000; // 30 minutes in milliseconds
+
+      if (timeSinceLastTrade < cooldownMs) {
+        const remainingMs = cooldownMs - timeSinceLastTrade;
+        const remainingMinutes = Math.ceil(remainingMs / 60000);
+        return res.status(429).json({
+          error: `Manual trade cooldown active. Please wait ${remainingMinutes} more minute(s) before placing another order.`,
+          cooldownRemainingMs: remainingMs,
+        });
+      }
+    }
+
     const availableCash = Number(user.account.cashBalance) - Number(user.account.reservedCash);
     if (totalCost > availableCash) {
       return res.status(400).json({
@@ -50,11 +65,12 @@ router.post('/bids', async (req: Request, res: Response) => {
 
     // Create bid and reserve cash
     const bid = await prisma.$transaction(async (tx) => {
-      // Reserve cash
+      // Reserve cash and update last manual trade timestamp
       await tx.account.update({
         where: { userId },
         data: {
           reservedCash: { increment: totalCost },
+          lastManualTradeAt: new Date(),
         },
       });
 
@@ -101,13 +117,38 @@ router.post('/asks', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Shares and price must be positive' });
     }
 
-    // Get company
-    const company = await prisma.company.findUnique({
-      where: { tickerSymbol: ticker.toUpperCase() },
-    });
+    // Get company and user account
+    const [company, user] = await Promise.all([
+      prisma.company.findUnique({
+        where: { tickerSymbol: ticker.toUpperCase() },
+      }),
+      prisma.user.findUnique({
+        where: { id: userId },
+        include: { account: true },
+      }),
+    ]);
+
+    if (!user || !user.account) {
+      return res.status(401).json({ error: 'Please log in to place orders' });
+    }
 
     if (!company) {
       return res.status(404).json({ error: 'Company not found' });
+    }
+
+    // Check 30-minute cooldown on manual trades
+    if (user.account.lastManualTradeAt) {
+      const timeSinceLastTrade = Date.now() - user.account.lastManualTradeAt.getTime();
+      const cooldownMs = 30 * 60 * 1000; // 30 minutes in milliseconds
+
+      if (timeSinceLastTrade < cooldownMs) {
+        const remainingMs = cooldownMs - timeSinceLastTrade;
+        const remainingMinutes = Math.ceil(remainingMs / 60000);
+        return res.status(429).json({
+          error: `Manual trade cooldown active. Please wait ${remainingMinutes} more minute(s) before placing another order.`,
+          cooldownRemainingMs: remainingMs,
+        });
+      }
     }
 
     // Get user's holding
@@ -143,6 +184,14 @@ router.post('/asks', async (req: Request, res: Response) => {
         },
         data: {
           reservedShares: { increment: shareCount },
+        },
+      });
+
+      // Update last manual trade timestamp
+      await tx.account.update({
+        where: { userId },
+        data: {
+          lastManualTradeAt: new Date(),
         },
       });
 
