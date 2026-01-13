@@ -10,11 +10,25 @@ import type {
 
 const API_BASE = '/api';
 
+function getAuthToken(): string | null {
+  return localStorage.getItem('token');
+}
+
 async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
+  const token = getAuthToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+
+  // Add Authorization header if token exists
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   const response = await fetch(url, {
     ...options,
     headers: {
-      'Content-Type': 'application/json',
+      ...headers,
       ...options?.headers,
     },
   });
@@ -27,11 +41,18 @@ async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
   return response.json();
 }
 
-// Users
-export async function registerUser(username: string, email: string): Promise<User> {
+// Auth
+export async function registerUser(username: string, password: string): Promise<User & { token: string }> {
   return fetchJSON(`${API_BASE}/users/register`, {
     method: 'POST',
-    body: JSON.stringify({ username, email }),
+    body: JSON.stringify({ username, password }),
+  });
+}
+
+export async function loginUser(username: string, password: string): Promise<User & { token: string }> {
+  return fetchJSON(`${API_BASE}/users/login`, {
+    method: 'POST',
+    body: JSON.stringify({ username, password }),
   });
 }
 
@@ -57,7 +78,6 @@ export async function getLeaderboard(): Promise<LeaderboardEntry[]> {
 
 // Companies
 export async function foundCompany(
-  userId: number,
   tickerSymbol: string,
   companyName: string,
   investmentAmount: number,
@@ -65,7 +85,7 @@ export async function foundCompany(
 ): Promise<{ success: boolean; company: Company }> {
   return fetchJSON(`${API_BASE}/companies/found`, {
     method: 'POST',
-    body: JSON.stringify({ userId, tickerSymbol, companyName, investmentAmount, totalShares }),
+    body: JSON.stringify({ tickerSymbol, companyName, investmentAmount, totalShares }),
   });
 }
 
@@ -78,77 +98,70 @@ export async function getCompany(ticker: string): Promise<Company> {
 }
 
 export async function splitStock(
-  userId: number,
   ticker: string
 ): Promise<{ success: boolean; message: string; newTotalShares: string; splitMultiplier: number }> {
   return fetchJSON(`${API_BASE}/companies/${ticker}/split`, {
     method: 'POST',
-    body: JSON.stringify({ userId }),
+    body: JSON.stringify({}),
   });
 }
 
 // Trading
 export async function placeBid(
-  userId: number,
   ticker: string,
   shares: number,
   pricePerShare: number
 ): Promise<{ success: boolean; bidId: number; totalCost: number }> {
   return fetchJSON(`${API_BASE}/trading/bids`, {
     method: 'POST',
-    body: JSON.stringify({ userId, ticker, shares, pricePerShare }),
+    body: JSON.stringify({ ticker, shares, pricePerShare }),
   });
 }
 
 export async function placeAsk(
-  userId: number,
   ticker: string,
   shares: number,
   pricePerShare: number
 ): Promise<{ success: boolean; askId: number }> {
   return fetchJSON(`${API_BASE}/trading/asks`, {
     method: 'POST',
-    body: JSON.stringify({ userId, ticker, shares, pricePerShare }),
+    body: JSON.stringify({ ticker, shares, pricePerShare }),
   });
 }
 
 export async function fulfillBid(
-  bidId: number,
-  userId: number
+  bidId: number
 ): Promise<{ success: boolean; transactionId: number }> {
   return fetchJSON(`${API_BASE}/trading/bids/${bidId}/fulfill`, {
     method: 'POST',
-    body: JSON.stringify({ userId }),
+    body: JSON.stringify({}),
   });
 }
 
 export async function fulfillAsk(
-  askId: number,
-  userId: number
+  askId: number
 ): Promise<{ success: boolean; transactionId: number }> {
   return fetchJSON(`${API_BASE}/trading/asks/${askId}/fulfill`, {
     method: 'POST',
-    body: JSON.stringify({ userId }),
+    body: JSON.stringify({}),
   });
 }
 
 export async function cancelBid(
-  bidId: number,
-  userId: number
+  bidId: number
 ): Promise<{ success: boolean }> {
   return fetchJSON(`${API_BASE}/trading/bids/${bidId}/cancel`, {
     method: 'POST',
-    body: JSON.stringify({ userId }),
+    body: JSON.stringify({}),
   });
 }
 
 export async function cancelAsk(
-  askId: number,
-  userId: number
+  askId: number
 ): Promise<{ success: boolean }> {
   return fetchJSON(`${API_BASE}/trading/asks/${askId}/cancel`, {
     method: 'POST',
-    body: JSON.stringify({ userId }),
+    body: JSON.stringify({}),
   });
 }
 
@@ -174,13 +187,12 @@ export async function getTransactions(
 
 // Posts
 export async function createPost(
-  userId: number,
   content: string,
   mentionedTicker?: string
 ): Promise<Post> {
   return fetchJSON(`${API_BASE}/posts`, {
     method: 'POST',
-    body: JSON.stringify({ userId, content, mentionedTicker }),
+    body: JSON.stringify({ content, mentionedTicker }),
   });
 }
 
@@ -194,17 +206,16 @@ export async function getPosts(ticker?: string, limit?: number): Promise<Post[]>
 
 export async function editPost(
   postId: number,
-  userId: number,
   content: string
 ): Promise<Post> {
   return fetchJSON(`${API_BASE}/posts/${postId}`, {
     method: 'PUT',
-    body: JSON.stringify({ userId, content }),
+    body: JSON.stringify({ content }),
   });
 }
 
-export async function deletePost(postId: number, userId: number): Promise<void> {
-  return fetchJSON(`${API_BASE}/posts/${postId}?userId=${userId}`, {
+export async function deletePost(postId: number): Promise<void> {
+  return fetchJSON(`${API_BASE}/posts/${postId}`, {
     method: 'DELETE',
   });
 }
@@ -231,31 +242,29 @@ export interface BotTool {
   description: string;
 }
 
-export async function getBotPrompt(userId: number): Promise<BotPrompt> {
-  return fetchJSON(`${API_BASE}/bot/prompt/${userId}`);
+export async function getBotPrompt(): Promise<BotPrompt> {
+  return fetchJSON(`${API_BASE}/bot/prompt`);
 }
 
 export async function saveBotPrompt(
-  userId: number,
   promptText: string
 ): Promise<{ success: boolean; promptId: number; version: number }> {
   return fetchJSON(`${API_BASE}/bot/prompt`, {
     method: 'POST',
-    body: JSON.stringify({ userId, promptText }),
+    body: JSON.stringify({ promptText }),
   });
 }
 
 export async function toggleBot(
-  userId: number,
   isActive: boolean
 ): Promise<{ success: boolean; isActive: boolean }> {
   return fetchJSON(`${API_BASE}/bot/toggle`, {
     method: 'POST',
-    body: JSON.stringify({ userId, isActive }),
+    body: JSON.stringify({ isActive }),
   });
 }
 
-export async function runBotOnce(userId: number): Promise<{
+export async function runBotOnce(): Promise<{
   success?: boolean;
   error?: string;
   toolCallCount?: number;
@@ -263,12 +272,12 @@ export async function runBotOnce(userId: number): Promise<{
 }> {
   return fetchJSON(`${API_BASE}/bot/run-once`, {
     method: 'POST',
-    body: JSON.stringify({ userId }),
+    body: JSON.stringify({}),
   });
 }
 
-export async function getBotLogs(userId: number, limit = 50): Promise<BotActivityLog[]> {
-  return fetchJSON(`${API_BASE}/bot/logs/${userId}?limit=${limit}`);
+export async function getBotLogs(limit = 50): Promise<BotActivityLog[]> {
+  return fetchJSON(`${API_BASE}/bot/logs?limit=${limit}`);
 }
 
 export async function getBotTools(): Promise<BotTool[]> {

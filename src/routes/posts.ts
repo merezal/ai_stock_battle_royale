@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
+import { authenticate } from '../middleware/auth';
 
 const router = Router();
 
@@ -14,12 +15,13 @@ function sanitizeString(input: string, maxLength: number): string {
 }
 
 // Create a post
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', authenticate, async (req: Request, res: Response) => {
   try {
-    const { userId, content, mentionedTicker } = req.body;
+    const userId = req.user!.userId; // Use authenticated user ID
+    const { content, mentionedTicker } = req.body;
 
-    if (!userId || !content) {
-      return res.status(400).json({ error: 'userId and content are required' });
+    if (!content) {
+      return res.status(400).json({ error: 'content is required' });
     }
 
     // Sanitize post content
@@ -101,13 +103,14 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // Edit a post
-router.put('/:postId', async (req: Request<{ postId: string }>, res: Response) => {
+router.put('/:postId', authenticate, async (req: Request<{ postId: string }>, res: Response) => {
   try {
     const postId = parseInt(req.params.postId);
-    const { userId, content } = req.body;
+    const userId = req.user!.userId; // Use authenticated user ID
+    const { content } = req.body;
 
-    if (!userId || !content) {
-      return res.status(400).json({ error: 'userId and content are required' });
+    if (!content) {
+      return res.status(400).json({ error: 'content is required' });
     }
 
     // Sanitize post content
@@ -150,14 +153,10 @@ router.put('/:postId', async (req: Request<{ postId: string }>, res: Response) =
 });
 
 // Delete a post
-router.delete('/:postId', async (req: Request<{ postId: string }>, res: Response) => {
+router.delete('/:postId', authenticate, async (req: Request<{ postId: string }>, res: Response) => {
   try {
     const postId = parseInt(req.params.postId);
-    const userId = parseInt(String(req.query.userId));
-
-    if (!userId) {
-      return res.status(400).json({ error: 'userId is required' });
-    }
+    const userId = req.user!.userId; // Use authenticated user ID
 
     const post = await prisma.post.findUnique({
       where: { id: postId },

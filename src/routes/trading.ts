@@ -1,16 +1,21 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
+import { authenticate } from '../middleware/auth';
 
 const router = Router();
+
+// Apply authentication to all trading routes
+router.use(authenticate);
 
 // Place a bid (buy order)
 router.post('/bids', async (req: Request, res: Response) => {
   try {
-    const { userId, ticker, shares, pricePerShare } = req.body;
+    const userId = req.user!.userId; // Use authenticated user ID
+    const { ticker, shares, pricePerShare } = req.body;
 
-    if (!userId || !ticker || !shares || !pricePerShare) {
+    if (!ticker || !shares || !pricePerShare) {
       return res.status(400).json({
-        error: 'userId, ticker, shares, and pricePerShare are required',
+        error: 'ticker, shares, and pricePerShare are required',
       });
     }
 
@@ -117,11 +122,12 @@ router.post('/bids', async (req: Request, res: Response) => {
 // Place an ask (sell order)
 router.post('/asks', async (req: Request, res: Response) => {
   try {
-    const { userId, ticker, shares, pricePerShare } = req.body;
+    const userId = req.user!.userId; // Use authenticated user ID
+    const { ticker, shares, pricePerShare } = req.body;
 
-    if (!userId || !ticker || !shares || !pricePerShare) {
+    if (!ticker || !shares || !pricePerShare) {
       return res.status(400).json({
-        error: 'userId, ticker, shares, and pricePerShare are required',
+        error: 'ticker, shares, and pricePerShare are required',
       });
     }
 
@@ -253,11 +259,7 @@ router.post('/asks', async (req: Request, res: Response) => {
 router.post('/bids/:bidId/fulfill', async (req: Request<{ bidId: string }>, res: Response) => {
   try {
     const bidId = parseInt(req.params.bidId);
-    const sellerId = parseInt(req.body.userId); // The fulfiller (seller)
-
-    if (!sellerId || isNaN(sellerId)) {
-      return res.status(400).json({ error: 'userId is required' });
-    }
+    const sellerId = req.user!.userId; // Use authenticated user as seller
 
     const bid = await prisma.bid.findUnique({
       where: { id: bidId },
@@ -409,11 +411,7 @@ router.post('/bids/:bidId/fulfill', async (req: Request<{ bidId: string }>, res:
 router.post('/asks/:askId/fulfill', async (req: Request<{ askId: string }>, res: Response) => {
   try {
     const askId = parseInt(req.params.askId);
-    const buyerId = parseInt(req.body.userId); // The fulfiller (buyer)
-
-    if (!buyerId || isNaN(buyerId)) {
-      return res.status(400).json({ error: 'userId is required' });
-    }
+    const buyerId = req.user!.userId; // Use authenticated user as buyer
 
     const ask = await prisma.ask.findUnique({
       where: { id: askId },
@@ -563,11 +561,7 @@ router.post('/asks/:askId/fulfill', async (req: Request<{ askId: string }>, res:
 router.post('/bids/:bidId/cancel', async (req: Request<{ bidId: string }>, res: Response) => {
   try {
     const bidId = parseInt(req.params.bidId);
-    const { userId } = req.body;
-
-    if (!userId) {
-      return res.status(400).json({ error: 'userId is required' });
-    }
+    const userId = req.user!.userId; // Use authenticated user
 
     const bid = await prisma.bid.findUnique({
       where: { id: bidId },
@@ -622,11 +616,7 @@ router.post('/bids/:bidId/cancel', async (req: Request<{ bidId: string }>, res: 
 router.post('/asks/:askId/cancel', async (req: Request<{ askId: string }>, res: Response) => {
   try {
     const askId = parseInt(req.params.askId);
-    const { userId } = req.body;
-
-    if (!userId) {
-      return res.status(400).json({ error: 'userId is required' });
-    }
+    const userId = req.user!.userId; // Use authenticated user
 
     const ask = await prisma.ask.findUnique({
       where: { id: askId },

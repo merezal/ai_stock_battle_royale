@@ -22,7 +22,7 @@ export function Companies() {
 
   const foundMutation = useMutation({
     mutationFn: () =>
-      foundCompany(userId!, ticker.toUpperCase(), companyName, parseFloat(investment), parseInt(shares)),
+      foundCompany(ticker.toUpperCase(), companyName, parseFloat(investment), parseInt(shares)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['companies'] });
       queryClient.invalidateQueries({ queryKey: ['portfolio'] });

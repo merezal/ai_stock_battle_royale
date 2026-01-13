@@ -25,7 +25,7 @@ export function Posts() {
   });
 
   const createMutation = useMutation({
-    mutationFn: () => createPost(userId!, content, mentionedTicker || undefined),
+    mutationFn: () => createPost(content, mentionedTicker || undefined),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['posts'] });
       setContent('');

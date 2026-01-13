@@ -9,6 +9,7 @@ import {
   getExecutionState,
 } from '../services/bot-executor';
 import { toolDefinitions } from '../services/mcp-tools';
+import { authenticate } from '../middleware/auth';
 
 const router = Router();
 
@@ -23,9 +24,9 @@ function sanitizePromptText(input: string, maxLength: number): string {
 }
 
 // Get user's prompt
-router.get('/prompt/:userId', async (req: Request<{ userId: string }>, res: Response) => {
+router.get('/prompt', authenticate, async (req: Request, res: Response) => {
   try {
-    const userId = parseInt(req.params.userId);
+    const userId = req.user!.userId; // Use authenticated user ID
 
     const prompt = await prisma.llmPrompt.findFirst({
       where: { userId },
@@ -55,27 +56,19 @@ router.get('/prompt/:userId', async (req: Request<{ userId: string }>, res: Resp
 });
 
 // Save/update user's prompt
-router.post('/prompt', async (req: Request, res: Response) => {
+router.post('/prompt', authenticate, async (req: Request, res: Response) => {
   try {
-    const { userId, promptText } = req.body;
+    const userId = req.user!.userId; // Use authenticated user ID
+    const { promptText } = req.body;
 
-    if (!userId || typeof promptText !== 'string') {
-      return res.status(400).json({ error: 'userId and promptText are required' });
+    if (typeof promptText !== 'string') {
+      return res.status(400).json({ error: 'promptText is required' });
     }
 
     // Sanitize prompt text (limit to 5000 characters)
     const sanitizedPromptText = sanitizePromptText(promptText, 5000);
     if (sanitizedPromptText.length === 0) {
       return res.status(400).json({ error: 'Prompt text cannot be empty' });
-    }
-
-    // Check if user exists
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-    });
-
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
     }
 
     // Find existing prompt or create new one
@@ -116,12 +109,13 @@ router.post('/prompt', async (req: Request, res: Response) => {
 });
 
 // Toggle bot active state
-router.post('/toggle', async (req: Request, res: Response) => {
+router.post('/toggle', authenticate, async (req: Request, res: Response) => {
   try {
-    const { userId, isActive } = req.body;
+    const userId = req.user!.userId; // Use authenticated user ID
+    const { isActive } = req.body;
 
-    if (!userId || typeof isActive !== 'boolean') {
-      return res.status(400).json({ error: 'userId and isActive (boolean) are required' });
+    if (typeof isActive !== 'boolean') {
+      return res.status(400).json({ error: 'isActive (boolean) is required' });
     }
 
     const existingPrompt = await prisma.llmPrompt.findFirst({
@@ -152,13 +146,9 @@ router.post('/toggle', async (req: Request, res: Response) => {
 });
 
 // Run bot once manually
-router.post('/run-once', async (req: Request, res: Response) => {
+router.post('/run-once', authenticate, async (req: Request, res: Response) => {
   try {
-    const { userId } = req.body;
-
-    if (!userId) {
-      return res.status(400).json({ error: 'userId is required' });
-    }
+    const userId = req.user!.userId; // Use authenticated user ID
 
     const result = await executeBotOnce(userId);
     return res.json(result);
@@ -169,9 +159,9 @@ router.post('/run-once', async (req: Request, res: Response) => {
 });
 
 // Get recent activity logs for a user
-router.get('/logs/:userId', async (req: Request<{ userId: string }>, res: Response) => {
+router.get('/logs', authenticate, async (req: Request, res: Response) => {
   try {
-    const userId = parseInt(req.params.userId);
+    const userId = req.user!.userId; // Use authenticated user ID
     const limit = parseInt(req.query.limit as string) || 50;
 
     const logs = await prisma.llmActivityLog.findMany({

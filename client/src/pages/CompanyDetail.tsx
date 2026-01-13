@@ -8,7 +8,7 @@ import { useCurrentUser } from '../hooks/useCurrentUser';
 
 export function CompanyDetail() {
   const { ticker } = useParams<{ ticker: string }>();
-  const { userId, user } = useCurrentUser();
+  const { user } = useCurrentUser();
   const queryClient = useQueryClient();
   const [splitError, setSplitError] = useState('');
 
@@ -26,7 +26,7 @@ export function CompanyDetail() {
   });
 
   const splitMutation = useMutation({
-    mutationFn: () => splitStock(userId!, ticker!),
+    mutationFn: () => splitStock(ticker!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['company', ticker] });
       queryClient.invalidateQueries({ queryKey: ['companies'] });

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { Prisma } from '@prisma/client';
+import { authenticate } from '../middleware/auth';
 
 const router = Router();
 
@@ -34,13 +35,14 @@ function validateTicker(ticker: string): { valid: boolean; error?: string } {
 }
 
 // Found a new company
-router.post('/found', async (req: Request, res: Response) => {
+router.post('/found', authenticate, async (req: Request, res: Response) => {
   try {
-    const { userId, tickerSymbol, companyName, investmentAmount, totalShares } = req.body;
+    const userId = req.user!.userId; // Use authenticated user ID
+    const { tickerSymbol, companyName, investmentAmount, totalShares } = req.body;
 
-    if (!userId || !tickerSymbol || !companyName || !investmentAmount || !totalShares) {
+    if (!tickerSymbol || !companyName || !investmentAmount || !totalShares) {
       return res.status(400).json({
-        error: 'userId, tickerSymbol, companyName, investmentAmount, and totalShares are required',
+        error: 'tickerSymbol, companyName, investmentAmount, and totalShares are required',
       });
     }
 
@@ -247,14 +249,10 @@ router.get('/:ticker', async (req: Request<{ ticker: string }>, res: Response) =
 });
 
 // Stock split - only available to majority shareholder
-router.post('/:ticker/split', async (req: Request<{ ticker: string }>, res: Response) => {
+router.post('/:ticker/split', authenticate, async (req: Request<{ ticker: string }>, res: Response) => {
   try {
     const ticker = req.params.ticker.toUpperCase();
-    const { userId } = req.body;
-
-    if (!userId) {
-      return res.status(400).json({ error: 'userId is required' });
-    }
+    const userId = req.user!.userId; // Use authenticated user ID
 
     const company = await prisma.company.findUnique({
       where: { tickerSymbol: ticker },

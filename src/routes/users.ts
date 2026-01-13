@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { Prisma } from '@prisma/client';
+import { hashPassword, verifyPassword, generateToken, validatePassword } from '../lib/auth';
+import { authenticate, authorizeUser } from '../middleware/auth';
 
 const router = Router();
 
@@ -36,10 +38,10 @@ function validateUsername(username: string): { valid: boolean; error?: string } 
 // Register a new user
 router.post('/register', async (req: Request, res: Response) => {
   try {
-    const { username, email } = req.body;
+    const { username, password } = req.body;
 
-    if (!username || !email) {
-      return res.status(400).json({ error: 'Username and email are required' });
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
     }
 
     // Validate and sanitize username
@@ -49,16 +51,19 @@ router.post('/register', async (req: Request, res: Response) => {
     }
     const sanitizedUsername = username.trim();
 
-    // Sanitize email
-    const sanitizedEmail = sanitizeString(email, 100).toLowerCase();
-    if (sanitizedEmail.length === 0 || !sanitizedEmail.includes('@')) {
-      return res.status(400).json({ error: 'Valid email is required' });
+    // Validate password
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.valid) {
+      return res.status(400).json({ error: passwordValidation.error });
     }
+
+    // Hash password
+    const passwordHash = await hashPassword(password);
 
     const user = await prisma.user.create({
       data: {
         username: sanitizedUsername,
-        email: sanitizedEmail,
+        passwordHash,
         account: {
           create: {
             cashBalance: 100000.00,
@@ -72,21 +77,70 @@ router.post('/register', async (req: Request, res: Response) => {
       },
     });
 
+    // Generate JWT token
+    const token = generateToken({
+      userId: user.id,
+      username: user.username,
+    });
+
     return res.status(201).json({
       id: user.id,
       username: user.username,
-      email: user.email,
+      token,
       cashBalance: Number(user.account?.cashBalance ?? 0),
       createdAt: user.createdAt,
     });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       if (error.code === 'P2002') {
-        return res.status(409).json({ error: 'Username or email already exists' });
+        return res.status(409).json({ error: 'Username already exists' });
       }
     }
     console.error(error);
     return res.status(500).json({ error: 'Failed to register user' });
+  }
+});
+
+// Login endpoint
+router.post('/login', async (req: Request, res: Response) => {
+  try {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
+
+    // Find user
+    const user = await prisma.user.findUnique({
+      where: { username: username.trim() },
+      include: { account: true },
+    });
+
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid username or password' });
+    }
+
+    // Verify password
+    const isValid = await verifyPassword(password, user.passwordHash);
+    if (!isValid) {
+      return res.status(401).json({ error: 'Invalid username or password' });
+    }
+
+    // Generate JWT token
+    const token = generateToken({
+      userId: user.id,
+      username: user.username,
+    });
+
+    return res.json({
+      id: user.id,
+      username: user.username,
+      token,
+      cashBalance: Number(user.account?.cashBalance ?? 0),
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: 'Failed to log in' });
   }
 });
 
@@ -189,7 +243,6 @@ router.get('/:id', async (req: Request<{ id: string }>, res: Response) => {
     return res.json({
       id: user.id,
       username: user.username,
-      email: user.email,
       cashBalance,
       reservedCash,
       availableCash: cashBalance - reservedCash,

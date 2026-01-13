@@ -32,7 +32,7 @@ export function Bot() {
   // Fetch current prompt
   const { data: botPrompt, isLoading: promptLoading } = useQuery<BotPrompt>({
     queryKey: ['botPrompt', user?.id],
-    queryFn: () => getBotPrompt(user!.id),
+    queryFn: getBotPrompt,
     enabled: !!user?.id,
   });
 
@@ -60,14 +60,14 @@ export function Bot() {
   // Fetch activity logs
   const { data: logs, isLoading: logsLoading } = useQuery<BotActivityLog[]>({
     queryKey: ['botLogs', user?.id],
-    queryFn: () => getBotLogs(user!.id, 30),
+    queryFn: () => getBotLogs(30),
     enabled: !!user?.id,
     refetchInterval: 10000,
   });
 
   // Save prompt mutation
   const saveMutation = useMutation({
-    mutationFn: () => saveBotPrompt(user!.id, promptText),
+    mutationFn: () => saveBotPrompt(promptText),
     onSuccess: () => {
       setHasChanges(false);
       queryClient.invalidateQueries({ queryKey: ['botPrompt', user?.id] });
@@ -76,7 +76,7 @@ export function Bot() {
 
   // Toggle mutation
   const toggleMutation = useMutation({
-    mutationFn: (isActive: boolean) => toggleBot(user!.id, isActive),
+    mutationFn: (isActive: boolean) => toggleBot(isActive),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['botPrompt', user?.id] });
       queryClient.invalidateQueries({ queryKey: ['botStatus'] });
@@ -85,7 +85,7 @@ export function Bot() {
 
   // Run once mutation
   const runOnceMutation = useMutation({
-    mutationFn: () => runBotOnce(user!.id),
+    mutationFn: runBotOnce,
     onSuccess: (result) => {
       setRunResult(result);
       queryClient.invalidateQueries({ queryKey: ['botLogs', user?.id] });

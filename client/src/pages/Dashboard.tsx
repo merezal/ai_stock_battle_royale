@@ -60,7 +60,7 @@ export function Dashboard() {
   });
 
   const placeBidMutation = useMutation({
-    mutationFn: () => placeBid(userId!, selectedTicker, parseInt(shares), parseFloat(price)),
+    mutationFn: () => placeBid(selectedTicker, parseInt(shares), parseFloat(price)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orderbook'] });
       queryClient.invalidateQueries({ queryKey: ['portfolio'] });
@@ -73,7 +73,7 @@ export function Dashboard() {
   });
 
   const placeAskMutation = useMutation({
-    mutationFn: () => placeAsk(userId!, selectedTicker, parseInt(shares), parseFloat(price)),
+    mutationFn: () => placeAsk(selectedTicker, parseInt(shares), parseFloat(price)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orderbook'] });
       queryClient.invalidateQueries({ queryKey: ['portfolio'] });
@@ -86,7 +86,7 @@ export function Dashboard() {
   });
 
   const fulfillBidMutation = useMutation({
-    mutationFn: (bidId: number) => fulfillBid(bidId, userId!),
+    mutationFn: (bidId: number) => fulfillBid(bidId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orderbook'] });
       queryClient.invalidateQueries({ queryKey: ['portfolio'] });
@@ -99,7 +99,7 @@ export function Dashboard() {
   });
 
   const fulfillAskMutation = useMutation({
-    mutationFn: (askId: number) => fulfillAsk(askId, userId!),
+    mutationFn: (askId: number) => fulfillAsk(askId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orderbook'] });
       queryClient.invalidateQueries({ queryKey: ['portfolio'] });
@@ -112,7 +112,7 @@ export function Dashboard() {
   });
 
   const cancelBidMutation = useMutation({
-    mutationFn: (bidId: number) => cancelBid(bidId, userId!),
+    mutationFn: (bidId: number) => cancelBid(bidId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orderbook'] });
       queryClient.invalidateQueries({ queryKey: ['portfolio'] });
@@ -121,7 +121,7 @@ export function Dashboard() {
   });
 
   const cancelAskMutation = useMutation({
-    mutationFn: (askId: number) => cancelAsk(askId, userId!),
+    mutationFn: (askId: number) => cancelAsk(askId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orderbook'] });
       queryClient.invalidateQueries({ queryKey: ['portfolio'] });

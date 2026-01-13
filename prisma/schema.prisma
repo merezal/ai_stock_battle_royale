@@ -8,11 +8,11 @@ datasource db {
 }
 
 model User {
-  id        Int      @id @default(autoincrement()) @map("user_id")
-  username  String   @unique @db.VarChar(50)
-  email     String   @unique @db.VarChar(255)
-  createdAt DateTime @default(now()) @map("created_at")
-  isActive  Boolean  @default(true) @map("is_active")
+  id           Int      @id @default(autoincrement()) @map("user_id")
+  username     String   @unique @db.VarChar(50)
+  passwordHash String   @map("password_hash") @db.VarChar(255)
+  createdAt    DateTime @default(now()) @map("created_at")
+  isActive     Boolean  @default(true) @map("is_active")
 
   account        Account?
   foundedCompanies Company[]    @relation("FoundedCompanies")
