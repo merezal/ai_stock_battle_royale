@@ -22,6 +22,10 @@ router.post('/bids', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Shares and price must be positive' });
     }
 
+    if (price < 0.01) {
+      return res.status(400).json({ error: 'Price per share must be at least $0.01' });
+    }
+
     // Get user and company
     const [user, company] = await Promise.all([
       prisma.user.findUnique({
@@ -39,6 +43,17 @@ router.post('/bids', async (req: Request, res: Response) => {
 
     if (!company) {
       return res.status(404).json({ error: 'Company not found' });
+    }
+
+    // Check if user already has 5 open bids
+    const openBidsCount = await prisma.bid.count({
+      where: { userId, status: 'open' },
+    });
+
+    if (openBidsCount >= 5) {
+      return res.status(400).json({
+        error: 'You already have 5 open bids. Cancel or wait for fulfillment before placing more.',
+      });
     }
 
     // Check 30-minute cooldown on manual trades
@@ -117,6 +132,10 @@ router.post('/asks', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Shares and price must be positive' });
     }
 
+    if (price < 0.01) {
+      return res.status(400).json({ error: 'Price per share must be at least $0.01' });
+    }
+
     // Get company and user account
     const [company, user] = await Promise.all([
       prisma.company.findUnique({
@@ -134,6 +153,17 @@ router.post('/asks', async (req: Request, res: Response) => {
 
     if (!company) {
       return res.status(404).json({ error: 'Company not found' });
+    }
+
+    // Check if user already has 5 open asks
+    const openAsksCount = await prisma.ask.count({
+      where: { userId, status: 'open' },
+    });
+
+    if (openAsksCount >= 5) {
+      return res.status(400).json({
+        error: 'You already have 5 open asks. Cancel or wait for fulfillment before placing more.',
+      });
     }
 
     // Check 30-minute cooldown on manual trades

@@ -3,6 +3,16 @@ import { prisma } from '../lib/prisma';
 
 const router = Router();
 
+// Helper function to sanitize string input
+function sanitizeString(input: string, maxLength: number): string {
+  // Strip HTML tags and trim whitespace
+  const sanitized = input
+    .replace(/<[^>]*>/g, '')
+    .trim()
+    .substring(0, maxLength);
+  return sanitized;
+}
+
 // Create a post
 router.post('/', async (req: Request, res: Response) => {
   try {
@@ -10,6 +20,12 @@ router.post('/', async (req: Request, res: Response) => {
 
     if (!userId || !content) {
       return res.status(400).json({ error: 'userId and content are required' });
+    }
+
+    // Sanitize post content
+    const sanitizedContent = sanitizeString(content, 1000);
+    if (sanitizedContent.length === 0) {
+      return res.status(400).json({ error: 'Post content cannot be empty' });
     }
 
     let mentionedCompanyId: number | null = null;
@@ -26,7 +42,7 @@ router.post('/', async (req: Request, res: Response) => {
     const post = await prisma.post.create({
       data: {
         userId,
-        content,
+        content: sanitizedContent,
         mentionedCompanyId,
       },
       include: {
@@ -94,6 +110,12 @@ router.put('/:postId', async (req: Request<{ postId: string }>, res: Response) =
       return res.status(400).json({ error: 'userId and content are required' });
     }
 
+    // Sanitize post content
+    const sanitizedContent = sanitizeString(content, 1000);
+    if (sanitizedContent.length === 0) {
+      return res.status(400).json({ error: 'Post content cannot be empty' });
+    }
+
     const post = await prisma.post.findUnique({
       where: { id: postId },
     });
@@ -109,7 +131,7 @@ router.put('/:postId', async (req: Request<{ postId: string }>, res: Response) =
     const updatedPost = await prisma.post.update({
       where: { id: postId },
       data: {
-        content,
+        content: sanitizedContent,
         isEdited: true,
         editedAt: new Date(),
       },

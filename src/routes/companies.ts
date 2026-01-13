@@ -4,6 +4,35 @@ import { Prisma } from '@prisma/client';
 
 const router = Router();
 
+// Helper function to sanitize string input
+function sanitizeString(input: string, maxLength: number): string {
+  // Strip HTML tags and trim whitespace
+  const sanitized = input
+    .replace(/<[^>]*>/g, '')
+    .trim()
+    .substring(0, maxLength);
+  return sanitized;
+}
+
+// Helper function to validate ticker symbol
+function validateTicker(ticker: string): { valid: boolean; error?: string } {
+  if (!ticker || typeof ticker !== 'string') {
+    return { valid: false, error: 'Ticker symbol is required' };
+  }
+
+  const tickerUpper = ticker.toUpperCase().trim();
+
+  if (tickerUpper.length === 0 || tickerUpper.length > 4) {
+    return { valid: false, error: 'Ticker symbol must be 1-4 characters long' };
+  }
+
+  if (!/^[A-Z]+$/.test(tickerUpper)) {
+    return { valid: false, error: 'Ticker symbol must contain only letters A-Z' };
+  }
+
+  return { valid: true };
+}
+
 // Found a new company
 router.post('/found', async (req: Request, res: Response) => {
   try {
@@ -13,6 +42,19 @@ router.post('/found', async (req: Request, res: Response) => {
       return res.status(400).json({
         error: 'userId, tickerSymbol, companyName, investmentAmount, and totalShares are required',
       });
+    }
+
+    // Validate and sanitize ticker
+    const tickerValidation = validateTicker(tickerSymbol);
+    if (!tickerValidation.valid) {
+      return res.status(400).json({ error: tickerValidation.error });
+    }
+    const sanitizedTicker = tickerSymbol.toUpperCase().trim();
+
+    // Sanitize company name
+    const sanitizedCompanyName = sanitizeString(companyName, 100);
+    if (sanitizedCompanyName.length === 0) {
+      return res.status(400).json({ error: 'Company name cannot be empty' });
     }
 
     const investment = parseFloat(investmentAmount);
@@ -52,8 +94,8 @@ router.post('/found', async (req: Request, res: Response) => {
       // Create company
       const company = await tx.company.create({
         data: {
-          tickerSymbol: tickerSymbol.toUpperCase(),
-          companyName,
+          tickerSymbol: sanitizedTicker,
+          companyName: sanitizedCompanyName,
           foundedByUserId: userId,
           foundingCost: investment,
           totalSharesIssued: shares,
@@ -240,6 +282,34 @@ router.post('/:ticker/split', async (req: Request<{ ticker: string }>, res: Resp
         error: `Only the majority shareholder can split the stock. You own ${ownershipPercent.toFixed(1)}% (need >50%)`,
       });
     }
+
+    // Check if stock price after split would be below minimum (0.01)
+    // A 2:1 split halves the price, so we need currentPrice > 0.02 to ensure post-split price > 0.01
+    const lastTransaction = await prisma.transaction.findFirst({
+      where: { companyId: company.id },
+      orderBy: { timestamp: 'desc' },
+    });
+
+    const currentPrice = lastTransaction
+      ? Number(lastTransaction.pricePerShare) * (Number(company.splitMultiplier) / Number(lastTransaction.splitMultiplier))
+      : Number(company.foundingCost) / Number(company.totalSharesIssued);
+
+    const priceAfterSplit = currentPrice / 2;
+
+    // Use epsilon to handle floating point precision issues
+    const MINIMUM_PRICE = 0.01;
+    const EPSILON = 0.0001;
+
+    console.log(`[SPLIT VALIDATION] Ticker: ${ticker}, Current: $${currentPrice}, After Split: $${priceAfterSplit}, Threshold: $${MINIMUM_PRICE + EPSILON}`);
+
+    if (priceAfterSplit < MINIMUM_PRICE + EPSILON) {
+      console.log(`[SPLIT BLOCKED] Price after split ($${priceAfterSplit}) would be below minimum ($${MINIMUM_PRICE + EPSILON})`);
+      return res.status(400).json({
+        error: `Cannot split stock.`,
+      });
+    }
+
+    console.log(`[SPLIT ALLOWED] Proceeding with split`);
 
     // Perform the split in a transaction
     const result = await prisma.$transaction(async (tx) => {

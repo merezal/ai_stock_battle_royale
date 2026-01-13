@@ -126,31 +126,31 @@ export async function executeBot(userId: number, promptId: number, promptText: s
   const systemPrompt = buildSystemPrompt(user.username);
   const tools = getOllamaTools();
 
+  // Each turn gets a fresh system + user prompt (no context from previous turns)
   const messages: OllamaMessage[] = [
     { role: 'system', content: systemPrompt },
     { role: 'user', content: promptText },
   ];
 
   let toolCallCount = 0;
-  let messageCount = 0; // Track messages to skip initial system/user prompts
   const executionLog: Array<{ action: string; result: unknown }> = [];
 
   try {
+    // Within a single turn: loop up to MAX_TOOL_CALLS times
+    // System + User -> LLM -> Tool Call -> Tool Output -> back to LLM (repeat)
     while (toolCallCount < MAX_TOOL_CALLS) {
       const response = await callOllama(messages, tools);
 
-      // Add assistant response to messages
+      // Add assistant response to messages for this turn
       messages.push({
         role: 'assistant',
         content: response.message.content || '',
         tool_calls: response.message.tool_calls,
       });
 
-      messageCount++;
-
-      // Log assistant message (skip initial ones if they're just echoing the prompt)
+      // Log assistant message if present
       const assistantContent = response.message.thinking || '';
-      if (assistantContent.trim().length > 0 && messageCount > 0) {
+      if (assistantContent.trim().length > 0) {
         console.log(`[Bot ${user.username}] Logging thought process (${assistantContent.length} chars)`);
 
         // Log the message as an activity
@@ -163,16 +163,14 @@ export async function executeBot(userId: number, promptId: number, promptText: s
           action: 'assistant_message',
           result: { content: assistantContent },
         });
-      } else if (messageCount > 0) {
-        console.log(`[Bot ${user.username}] No thinking content to log (thinking field: ${response.message.thinking ? 'present but empty' : 'not present'})`);
       }
 
-      // If no tool calls, we're done
+      // If no tool calls, we're done with this turn
       if (!response.message.tool_calls || response.message.tool_calls.length === 0) {
         break;
       }
 
-      // Execute each tool call
+      // Execute each tool call and feed results back to LLM
       for (const toolCall of response.message.tool_calls) {
         toolCallCount++;
         const { name, arguments: args } = toolCall.function;
@@ -189,11 +187,16 @@ export async function executeBot(userId: number, promptId: number, promptText: s
         // Log the activity
         await logActivity(userId, promptId, name, args, result);
 
-        // Add tool result to messages
+        // Feed tool result back to LLM for next iteration
         messages.push({
           role: 'tool',
           content: JSON.stringify(result),
         });
+
+        // Stop if we've hit the limit
+        if (toolCallCount >= MAX_TOOL_CALLS) {
+          break;
+        }
       }
     }
 

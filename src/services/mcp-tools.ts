@@ -532,6 +532,17 @@ export async function executePlaceBid(userId: number, bids: Array<{ ticker: stri
     return { error: 'User not found' };
   }
 
+  // Check if user already has 5 open bids
+  const openBidsCount = await prisma.bid.count({
+    where: { userId, status: 'open' },
+  });
+
+  if (openBidsCount >= 5) {
+    return {
+      error: 'You already have 5 open bids. Cancel or wait for fulfillment before placing more.',
+    };
+  }
+
   // Calculate total cost and validate companies
   let totalCost = 0;
   const bidData: Array<{ ticker: string; shares: number; pricePerShare: number; companyId: number; totalCost: number }> = [];
@@ -540,6 +551,10 @@ export async function executePlaceBid(userId: number, bids: Array<{ ticker: stri
     // Validate positive shares and price
     if (bid.shares <= 0 || bid.pricePerShare <= 0) {
       return { error: `Shares and price must be positive. Got shares: ${bid.shares}, pricePerShare: ${bid.pricePerShare}` };
+    }
+
+    if (bid.pricePerShare < 0.01) {
+      return { error: `Price per share must be at least $0.01. Got: ${bid.pricePerShare}` };
     }
 
     const company = await prisma.company.findUnique({
@@ -612,6 +627,17 @@ export async function executePlaceAsk(userId: number, asks: Array<{ ticker: stri
     return { error: 'No asks provided. Must provide array of one or more asks.' };
   }
 
+  // Check if user already has 5 open asks
+  const openAsksCount = await prisma.ask.count({
+    where: { userId, status: 'open' },
+  });
+
+  if (openAsksCount >= 5) {
+    return {
+      error: 'You already have 5 open asks. Cancel or wait for fulfillment before placing more.',
+    };
+  }
+
   // Validate companies and holdings
   const askData: Array<{ ticker: string; shares: number; pricePerShare: number; companyId: number; holding: any }> = [];
 
@@ -619,6 +645,10 @@ export async function executePlaceAsk(userId: number, asks: Array<{ ticker: stri
     // Validate positive shares and price
     if (ask.shares <= 0 || ask.pricePerShare <= 0) {
       return { error: `Shares and price must be positive. Got shares: ${ask.shares}, pricePerShare: ${ask.pricePerShare}` };
+    }
+
+    if (ask.pricePerShare < 0.01) {
+      return { error: `Price per share must be at least $0.01. Got: ${ask.pricePerShare}` };
     }
 
     const company = await prisma.company.findUnique({

@@ -12,6 +12,16 @@ import { toolDefinitions } from '../services/mcp-tools';
 
 const router = Router();
 
+// Helper function to sanitize prompt text
+function sanitizePromptText(input: string, maxLength: number): string {
+  // Strip HTML tags and trim whitespace
+  const sanitized = input
+    .replace(/<[^>]*>/g, '')
+    .trim()
+    .substring(0, maxLength);
+  return sanitized;
+}
+
 // Get user's prompt
 router.get('/prompt/:userId', async (req: Request<{ userId: string }>, res: Response) => {
   try {
@@ -53,6 +63,12 @@ router.post('/prompt', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'userId and promptText are required' });
     }
 
+    // Sanitize prompt text (limit to 5000 characters)
+    const sanitizedPromptText = sanitizePromptText(promptText, 5000);
+    if (sanitizedPromptText.length === 0) {
+      return res.status(400).json({ error: 'Prompt text cannot be empty' });
+    }
+
     // Check if user exists
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -73,7 +89,7 @@ router.post('/prompt', async (req: Request, res: Response) => {
       prompt = await prisma.llmPrompt.update({
         where: { id: existingPrompt.id },
         data: {
-          promptText,
+          promptText: sanitizedPromptText,
           lastModified: new Date(),
           version: { increment: 1 },
         },
@@ -82,7 +98,7 @@ router.post('/prompt', async (req: Request, res: Response) => {
       prompt = await prisma.llmPrompt.create({
         data: {
           userId,
-          promptText,
+          promptText: sanitizedPromptText,
           isActive: false,
         },
       });

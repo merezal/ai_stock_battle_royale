@@ -4,6 +4,35 @@ import { Prisma } from '@prisma/client';
 
 const router = Router();
 
+// Helper function to sanitize string input
+function sanitizeString(input: string, maxLength: number): string {
+  // Strip HTML tags and trim whitespace
+  const sanitized = input
+    .replace(/<[^>]*>/g, '')
+    .trim()
+    .substring(0, maxLength);
+  return sanitized;
+}
+
+// Helper function to validate username
+function validateUsername(username: string): { valid: boolean; error?: string } {
+  if (!username || typeof username !== 'string') {
+    return { valid: false, error: 'Username is required' };
+  }
+
+  const sanitized = username.trim();
+
+  if (sanitized.length < 3 || sanitized.length > 20) {
+    return { valid: false, error: 'Username must be 3-20 characters long' };
+  }
+
+  if (!/^[a-zA-Z0-9_-]+$/.test(sanitized)) {
+    return { valid: false, error: 'Username can only contain letters, numbers, underscores, and hyphens' };
+  }
+
+  return { valid: true };
+}
+
 // Register a new user
 router.post('/register', async (req: Request, res: Response) => {
   try {
@@ -13,10 +42,23 @@ router.post('/register', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Username and email are required' });
     }
 
+    // Validate and sanitize username
+    const usernameValidation = validateUsername(username);
+    if (!usernameValidation.valid) {
+      return res.status(400).json({ error: usernameValidation.error });
+    }
+    const sanitizedUsername = username.trim();
+
+    // Sanitize email
+    const sanitizedEmail = sanitizeString(email, 100).toLowerCase();
+    if (sanitizedEmail.length === 0 || !sanitizedEmail.includes('@')) {
+      return res.status(400).json({ error: 'Valid email is required' });
+    }
+
     const user = await prisma.user.create({
       data: {
-        username,
-        email,
+        username: sanitizedUsername,
+        email: sanitizedEmail,
         account: {
           create: {
             cashBalance: 100000.00,
