@@ -1,0 +1,35 @@
+# Development override for docker-compose
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder  # Use builder stage for development
+    volumes:
+      # Mount source code for hot reload (if using nodemon)
+      - ./src:/app/src
+      - ./prisma:/app/prisma
+    environment:
+      NODE_ENV: development
+    command: npm run dev  # Override to use dev command
+
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      target: builder  # Use builder stage
+    volumes:
+      # Mount source for hot reload
+      - ./client/src:/app/src
+      - ./client/public:/app/public
+    command: npm run dev
+    ports:
+      - "5173:5173"  # Vite dev server port
+    environment:
+      - VITE_API_BASE_URL=http://localhost:3000
+
+  db:
+    ports:
+      - "5432:5432"  # Expose for local tools like pgAdmin

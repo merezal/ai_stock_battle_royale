@@ -8,7 +8,8 @@ import type {
   Post,
 } from '../types';
 
-const API_BASE = '/api';
+// Use environment variable for API URL, fallback to relative path for dev
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 function getAuthToken(): string | null {
   return localStorage.getItem('token');
