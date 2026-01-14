@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { toolDefinitions, executeTool } from './mcp-tools';
+import { logger } from '../lib/logger';
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3.2';
@@ -108,7 +109,7 @@ async function logActivity(
   // Debug log for assistant_message type
   if (actionType === 'assistant_message') {
     const contentLength = (result as { content?: string })?.content?.length || 0;
-    console.log(`[DB Log] Created assistant_message log (ID: ${logEntry.id}, content length: ${contentLength})`);
+    logger.debug('Created assistant_message log', { logEntryId: logEntry.id, contentLength });
   }
 }
 
@@ -151,7 +152,7 @@ export async function executeBot(userId: number, promptId: number, promptText: s
       // Log assistant message if present
       const assistantContent = response.message.thinking || '';
       if (assistantContent.trim().length > 0) {
-        console.log(`[Bot ${user.username}] Logging thought process (${assistantContent.length} chars)`);
+        logger.debug('Bot thought process', { username: user.username, contentLength: assistantContent.length });
 
         // Log the message as an activity
         await logActivity(userId, promptId, 'assistant_message', {}, {
@@ -175,7 +176,7 @@ export async function executeBot(userId: number, promptId: number, promptText: s
         toolCallCount++;
         const { name, arguments: args } = toolCall.function;
 
-        console.log(`[Bot ${user.username}] Executing tool: ${name}`, args);
+        logger.debug('Bot executing tool', { username: user.username, tool: name, args });
 
         const result = await executeTool(userId, name, args);
 
@@ -275,7 +276,7 @@ export function getExecutionState() {
 // Execute all active bots sequentially
 export async function executeAllActiveBots() {
   if (executionState.isExecuting) {
-    console.log('[Bot Executor] Already executing, skipping this cycle');
+    logger.debug('Bot executor already running, skipping cycle');
     return [];
   }
 
@@ -287,7 +288,7 @@ export async function executeAllActiveBots() {
     include: { user: { select: { username: true } } },
   });
 
-  console.log(`[Bot Executor] Running ${activePrompts.length} active bots`);
+  logger.info(`Running ${activePrompts.length} active bot(s)`);
 
   // Build the queue
   executionState.queue = activePrompts.map((prompt) => ({
@@ -309,7 +310,7 @@ export async function executeAllActiveBots() {
     const bot = executionState.queue.shift()!;
     executionState.currentBot = bot;
 
-    console.log(`[Bot Executor] Starting execution for ${bot.username}`);
+    logger.debug('Starting bot execution', { username: bot.username });
 
     try {
       const result = await executeBot(bot.userId, bot.promptId, bot.promptText);
@@ -320,6 +321,7 @@ export async function executeAllActiveBots() {
         result,
       });
     } catch (error) {
+      logger.error('Bot execution failed', { username: bot.username, error });
       results.push({
         userId: bot.userId,
         username: bot.username,
@@ -328,7 +330,7 @@ export async function executeAllActiveBots() {
       });
     }
 
-    console.log(`[Bot Executor] Finished execution for ${bot.username}`);
+    logger.debug('Finished bot execution', { username: bot.username });
   }
 
   executionState.currentBot = null;
@@ -345,17 +347,17 @@ export function startBotExecutionLoop() {
   const interval = parseInt(process.env.BOT_EXECUTION_INTERVAL || '30000', 10);
 
   if (botIntervalId) {
-    console.log('[Bot Executor] Loop already running');
+    logger.warn('Bot execution loop already running');
     return;
   }
 
-  console.log(`[Bot Executor] Starting execution loop (interval: ${interval}ms)`);
+  logger.info(`Starting bot execution loop (interval: ${interval}ms)`);
 
   // Run immediately, then on interval
-  executeAllActiveBots().catch(console.error);
+  executeAllActiveBots().catch((error) => logger.error('Bot execution loop error', error));
 
   botIntervalId = setInterval(() => {
-    executeAllActiveBots().catch(console.error);
+    executeAllActiveBots().catch((error) => logger.error('Bot execution loop error', error));
   }, interval);
 }
 
@@ -363,7 +365,7 @@ export function stopBotExecutionLoop() {
   if (botIntervalId) {
     clearInterval(botIntervalId);
     botIntervalId = null;
-    console.log('[Bot Executor] Stopped execution loop');
+    logger.info('Stopped bot execution loop');
   }
 }
 

@@ -1,18 +1,10 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { authenticate } from '../middleware/auth';
+import { sanitizeString } from '../lib/utils';
+import { logger } from '../lib/logger';
 
 const router = Router();
-
-// Helper function to sanitize string input
-function sanitizeString(input: string, maxLength: number): string {
-  // Strip HTML tags and trim whitespace
-  const sanitized = input
-    .replace(/<[^>]*>/g, '')
-    .trim()
-    .substring(0, maxLength);
-  return sanitized;
-}
 
 // Create a post
 router.post('/', authenticate, async (req: Request, res: Response) => {
@@ -61,7 +53,7 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
       createdAt: post.createdAt,
     });
   } catch (error) {
-    console.error(error);
+    logger.error('Error in posts route', error);
     return res.status(500).json({ error: 'Failed to create post' });
   }
 });
@@ -97,7 +89,7 @@ router.get('/', async (req: Request, res: Response) => {
 
     return res.json(result);
   } catch (error) {
-    console.error(error);
+    logger.error('Error in posts route', error);
     return res.status(500).json({ error: 'Failed to fetch posts' });
   }
 });
@@ -147,7 +139,7 @@ router.put('/:postId', authenticate, async (req: Request<{ postId: string }>, re
       editedAt: updatedPost.editedAt,
     });
   } catch (error) {
-    console.error(error);
+    logger.error('Error in posts route', error);
     return res.status(500).json({ error: 'Failed to edit post' });
   }
 });
@@ -176,7 +168,7 @@ router.delete('/:postId', authenticate, async (req: Request<{ postId: string }>,
 
     return res.json({ success: true });
   } catch (error) {
-    console.error(error);
+    logger.error('Error in posts route', error);
     return res.status(500).json({ error: 'Failed to delete post' });
   }
 });

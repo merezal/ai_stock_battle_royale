@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma';
+import { logger } from '../lib/logger';
 
 // Tool definitions for MCP protocol
 export const toolDefinitions = [
@@ -739,7 +740,7 @@ export async function executeFulfillBid(userId: number, bidIds: number[]) {
     return { error: 'No bid IDs provided. Must provide array of one or more bid IDs.' };
   }
 
-  console.log(`[executeFulfillBid] Attempting to fulfill ${bidIds.length} bid(s) for user ${userId}:`, bidIds);
+  logger.debug('Attempting to fulfill bids', { userId, bidIds });
 
   // Fetch all bids
   const bids = await prisma.bid.findMany({
@@ -750,7 +751,7 @@ export async function executeFulfillBid(userId: number, bidIds: number[]) {
   if (bids.length !== bidIds.length) {
     const foundIds = bids.map(b => b.id);
     const missingIds = bidIds.filter(id => !foundIds.includes(id));
-    console.log(`[executeFulfillBid] Bid(s) not found: ${missingIds.join(', ')}`);
+    logger.debug('Bids not found', { missingIds });
     return { error: `Bid(s) not found: ${missingIds.join(', ')}` };
   }
 
@@ -794,7 +795,7 @@ export async function executeFulfillBid(userId: number, bidIds: number[]) {
     }
   }
 
-  console.log(`[executeFulfillBid] Validation passed. Proceeding with transaction.`);
+  logger.debug('Bid fulfillment validation passed');
 
   // Execute all fulfillments in a single transaction
   const results = await prisma.$transaction(async (tx) => {
@@ -938,7 +939,7 @@ export async function executeFulfillBid(userId: number, bidIds: number[]) {
     return { transactions, totalCashReceived };
   });
 
-  console.log(`[executeFulfillBid] Successfully fulfilled ${bidIds.length} bid(s). Total cash: $${results.totalCashReceived}`);
+  logger.debug('Successfully fulfilled bids', { bidCount: bidIds.length, totalCash: results.totalCashReceived });
 
   return {
     success: true,
@@ -952,7 +953,7 @@ export async function executeFulfillAsk(userId: number, askIds: number[]) {
     return { error: 'No ask IDs provided. Must provide array of one or more ask IDs.' };
   }
 
-  console.log(`[executeFulfillAsk] Attempting to fulfill ${askIds.length} ask(s) for user ${userId}:`, askIds);
+  logger.debug('Attempting to fulfill asks', { userId, askIds });
 
   // Fetch all asks
   const asks = await prisma.ask.findMany({
@@ -963,7 +964,7 @@ export async function executeFulfillAsk(userId: number, askIds: number[]) {
   if (asks.length !== askIds.length) {
     const foundIds = asks.map(a => a.id);
     const missingIds = askIds.filter(id => !foundIds.includes(id));
-    console.log(`[executeFulfillAsk] Ask(s) not found: ${missingIds.join(', ')}`);
+    logger.debug('Asks not found', { missingIds });
     return { error: `Ask(s) not found: ${missingIds.join(', ')}` };
   }
 
@@ -994,7 +995,7 @@ export async function executeFulfillAsk(userId: number, askIds: number[]) {
     return { error: `Insufficient funds. Need $${totalCost}, have $${availableCash} available.` };
   }
 
-  console.log(`[executeFulfillAsk] Validation passed. Total cost: $${totalCost}, Available cash: $${availableCash}`);
+  logger.debug('Ask fulfillment validation passed', { totalCost, availableCash });
 
   // Execute all fulfillments in a single transaction
   const results = await prisma.$transaction(async (tx) => {
@@ -1134,7 +1135,7 @@ export async function executeFulfillAsk(userId: number, askIds: number[]) {
     return { transactions, totalCost };
   });
 
-  console.log(`[executeFulfillAsk] Successfully fulfilled ${askIds.length} ask(s). Total cost: $${results.totalCost}`);
+  logger.debug('Successfully fulfilled asks', { askCount: askIds.length, totalCost: results.totalCost });
 
   return {
     success: true,
@@ -1299,7 +1300,7 @@ export async function executeGetMyOpenOrders(userId: number) {
 
 // Main tool executor
 export async function executeTool(userId: number, toolName: string, args: Record<string, unknown>) {
-  console.log(`[executeTool] User ${userId} calling ${toolName} with args:`, JSON.stringify(args));
+  logger.debug('Executing tool', { userId, toolName, args });
 
   switch (toolName) {
     case 'get_my_portfolio':

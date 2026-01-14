@@ -3,37 +3,10 @@ import { prisma } from '../lib/prisma';
 import { Prisma } from '@prisma/client';
 import { hashPassword, verifyPassword, generateToken, validatePassword } from '../lib/auth';
 import { authenticate, authorizeUser } from '../middleware/auth';
+import { validateUsername } from '../lib/utils';
+import { logger } from '../lib/logger';
 
 const router = Router();
-
-// Helper function to sanitize string input
-function sanitizeString(input: string, maxLength: number): string {
-  // Strip HTML tags and trim whitespace
-  const sanitized = input
-    .replace(/<[^>]*>/g, '')
-    .trim()
-    .substring(0, maxLength);
-  return sanitized;
-}
-
-// Helper function to validate username
-function validateUsername(username: string): { valid: boolean; error?: string } {
-  if (!username || typeof username !== 'string') {
-    return { valid: false, error: 'Username is required' };
-  }
-
-  const sanitized = username.trim();
-
-  if (sanitized.length < 3 || sanitized.length > 20) {
-    return { valid: false, error: 'Username must be 3-20 characters long' };
-  }
-
-  if (!/^[a-zA-Z0-9_-]+$/.test(sanitized)) {
-    return { valid: false, error: 'Username can only contain letters, numbers, underscores, and hyphens' };
-  }
-
-  return { valid: true };
-}
 
 // Register a new user
 router.post('/register', async (req: Request, res: Response) => {
@@ -96,7 +69,7 @@ router.post('/register', async (req: Request, res: Response) => {
         return res.status(409).json({ error: 'Username already exists' });
       }
     }
-    console.error(error);
+    logger.error('Error in users route', error);
     return res.status(500).json({ error: 'Failed to register user' });
   }
 });
@@ -139,7 +112,7 @@ router.post('/login', async (req: Request, res: Response) => {
       cashBalance: Number(user.account?.cashBalance ?? 0),
     });
   } catch (error) {
-    console.error(error);
+    logger.error('Error in users route', error);
     return res.status(500).json({ error: 'Failed to log in' });
   }
 });
@@ -211,7 +184,7 @@ router.get('/by-username/:username/portfolio', async (req: Request<{ username: s
       createdAt: user.createdAt,
     });
   } catch (error) {
-    console.error(error);
+    logger.error('Error in users route', error);
     return res.status(500).json({ error: 'Failed to fetch user portfolio' });
   }
 });
@@ -258,7 +231,7 @@ router.get('/:id', async (req: Request<{ id: string }>, res: Response) => {
       createdAt: user.createdAt,
     });
   } catch (error) {
-    console.error(error);
+    logger.error('Error in users route', error);
     return res.status(500).json({ error: 'Failed to fetch user' });
   }
 });
@@ -328,7 +301,7 @@ router.get('/:id/portfolio', async (req: Request<{ id: string }>, res: Response)
       holdings,
     });
   } catch (error) {
-    console.error(error);
+    logger.error('Error in users route', error);
     return res.status(500).json({ error: 'Failed to fetch portfolio' });
   }
 });
@@ -384,7 +357,7 @@ router.get('/', async (_req: Request, res: Response) => {
 
     return res.json(leaderboard);
   } catch (error) {
-    console.error(error);
+    logger.error('Error in users route', error);
     return res.status(500).json({ error: 'Failed to fetch leaderboard' });
   }
 });
@@ -504,7 +477,7 @@ router.get('/by-username/:username/portfolio-history', async (req: Request<{ use
 
     return res.json(history);
   } catch (error) {
-    console.error(error);
+    logger.error('Error in users route', error);
     return res.status(500).json({ error: 'Failed to fetch portfolio history' });
   }
 });

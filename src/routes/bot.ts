@@ -10,18 +10,10 @@ import {
 } from '../services/bot-executor';
 import { toolDefinitions } from '../services/mcp-tools';
 import { authenticate } from '../middleware/auth';
+import { sanitizeString } from '../lib/utils';
+import { logger } from '../lib/logger';
 
 const router = Router();
-
-// Helper function to sanitize prompt text
-function sanitizePromptText(input: string, maxLength: number): string {
-  // Strip HTML tags and trim whitespace
-  const sanitized = input
-    .replace(/<[^>]*>/g, '')
-    .trim()
-    .substring(0, maxLength);
-  return sanitized;
-}
 
 // Get user's prompt
 router.get('/prompt', authenticate, async (req: Request, res: Response) => {
@@ -50,7 +42,7 @@ router.get('/prompt', authenticate, async (req: Request, res: Response) => {
       lastModified: prompt.lastModified,
     });
   } catch (error) {
-    console.error(error);
+    logger.error('Error in bot route', error);
     return res.status(500).json({ error: 'Failed to get prompt' });
   }
 });
@@ -66,7 +58,7 @@ router.post('/prompt', authenticate, async (req: Request, res: Response) => {
     }
 
     // Sanitize prompt text (limit to 5000 characters)
-    const sanitizedPromptText = sanitizePromptText(promptText, 5000);
+    const sanitizedPromptText = sanitizeString(promptText, 5000);
     if (sanitizedPromptText.length === 0) {
       return res.status(400).json({ error: 'Prompt text cannot be empty' });
     }
@@ -103,7 +95,7 @@ router.post('/prompt', authenticate, async (req: Request, res: Response) => {
       version: prompt.version,
     });
   } catch (error) {
-    console.error(error);
+    logger.error('Error in bot route', error);
     return res.status(500).json({ error: 'Failed to save prompt' });
   }
 });
@@ -140,7 +132,7 @@ router.post('/toggle', authenticate, async (req: Request, res: Response) => {
       isActive: prompt.isActive,
     });
   } catch (error) {
-    console.error(error);
+    logger.error('Error in bot route', error);
     return res.status(500).json({ error: 'Failed to toggle bot' });
   }
 });
@@ -153,7 +145,7 @@ router.post('/run-once', authenticate, async (req: Request, res: Response) => {
     const result = await executeBotOnce(userId);
     return res.json(result);
   } catch (error) {
-    console.error(error);
+    logger.error('Error in bot route', error);
     return res.status(500).json({ error: 'Failed to run bot' });
   }
 });
@@ -180,7 +172,7 @@ router.get('/logs', authenticate, async (req: Request, res: Response) => {
       }))
     );
   } catch (error) {
-    console.error(error);
+    logger.error('Error in bot route', error);
     return res.status(500).json({ error: 'Failed to get activity logs' });
   }
 });
@@ -201,7 +193,7 @@ router.post('/admin/start-loop', async (_req: Request, res: Response) => {
     startBotExecutionLoop();
     return res.json({ success: true, message: 'Bot execution loop started' });
   } catch (error) {
-    console.error(error);
+    logger.error('Error in bot route', error);
     return res.status(500).json({ error: 'Failed to start bot loop' });
   }
 });
@@ -212,7 +204,7 @@ router.post('/admin/stop-loop', async (_req: Request, res: Response) => {
     stopBotExecutionLoop();
     return res.json({ success: true, message: 'Bot execution loop stopped' });
   } catch (error) {
-    console.error(error);
+    logger.error('Error in bot route', error);
     return res.status(500).json({ error: 'Failed to stop bot loop' });
   }
 });
@@ -239,7 +231,7 @@ router.post('/admin/run-all', async (_req: Request, res: Response) => {
     const results = await executeAllActiveBots();
     return res.json({ success: true, results });
   } catch (error) {
-    console.error(error);
+    logger.error('Error in bot route', error);
     return res.status(500).json({ error: 'Failed to run all bots' });
   }
 });

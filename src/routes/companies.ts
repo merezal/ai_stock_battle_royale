@@ -2,37 +2,10 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { Prisma } from '@prisma/client';
 import { authenticate } from '../middleware/auth';
+import { sanitizeString, validateTicker } from '../lib/utils';
+import { logger } from '../lib/logger';
 
 const router = Router();
-
-// Helper function to sanitize string input
-function sanitizeString(input: string, maxLength: number): string {
-  // Strip HTML tags and trim whitespace
-  const sanitized = input
-    .replace(/<[^>]*>/g, '')
-    .trim()
-    .substring(0, maxLength);
-  return sanitized;
-}
-
-// Helper function to validate ticker symbol
-function validateTicker(ticker: string): { valid: boolean; error?: string } {
-  if (!ticker || typeof ticker !== 'string') {
-    return { valid: false, error: 'Ticker symbol is required' };
-  }
-
-  const tickerUpper = ticker.toUpperCase().trim();
-
-  if (tickerUpper.length === 0 || tickerUpper.length > 4) {
-    return { valid: false, error: 'Ticker symbol must be 1-4 characters long' };
-  }
-
-  if (!/^[A-Z]+$/.test(tickerUpper)) {
-    return { valid: false, error: 'Ticker symbol must contain only letters A-Z' };
-  }
-
-  return { valid: true };
-}
 
 // Found a new company
 router.post('/found', authenticate, async (req: Request, res: Response) => {
@@ -136,7 +109,7 @@ router.post('/found', authenticate, async (req: Request, res: Response) => {
         return res.status(409).json({ error: 'Ticker symbol already exists' });
       }
     }
-    console.error(error);
+    logger.error('Error in companies route', error);
     return res.status(500).json({ error: 'Failed to found company' });
   }
 });
@@ -175,7 +148,7 @@ router.get('/', async (_req: Request, res: Response) => {
 
     return res.json(result);
   } catch (error) {
-    console.error(error);
+    logger.error('Error in companies route', error);
     return res.status(500).json({ error: 'Failed to fetch companies' });
   }
 });
@@ -243,7 +216,7 @@ router.get('/:ticker', async (req: Request<{ ticker: string }>, res: Response) =
         })),
     });
   } catch (error) {
-    console.error(error);
+    logger.error('Error in companies route', error);
     return res.status(500).json({ error: 'Failed to fetch company' });
   }
 });
@@ -298,16 +271,12 @@ router.post('/:ticker/split', authenticate, async (req: Request<{ ticker: string
     const MINIMUM_PRICE = 0.01;
     const EPSILON = 0.0001;
 
-    console.log(`[SPLIT VALIDATION] Ticker: ${ticker}, Current: $${currentPrice}, After Split: $${priceAfterSplit}, Threshold: $${MINIMUM_PRICE + EPSILON}`);
-
     if (priceAfterSplit < MINIMUM_PRICE + EPSILON) {
-      console.log(`[SPLIT BLOCKED] Price after split ($${priceAfterSplit}) would be below minimum ($${MINIMUM_PRICE + EPSILON})`);
+      logger.debug('Stock split blocked - price would be below minimum', { ticker, currentPrice, priceAfterSplit });
       return res.status(400).json({
         error: `Cannot split stock.`,
       });
     }
-
-    console.log(`[SPLIT ALLOWED] Proceeding with split`);
 
     // Perform the split in a transaction
     const result = await prisma.$transaction(async (tx) => {
@@ -359,7 +328,7 @@ router.post('/:ticker/split', authenticate, async (req: Request<{ ticker: string
       splitMultiplier: Number(result.splitMultiplier),
     });
   } catch (error) {
-    console.error(error);
+    logger.error('Error in companies route', error);
     return res.status(500).json({ error: 'Failed to split stock' });
   }
 });

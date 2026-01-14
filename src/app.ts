@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
+import { logger } from './lib/logger';
 
 import usersRouter from './routes/users';
 import companiesRouter from './routes/companies';
@@ -31,7 +32,7 @@ app.get('/health', (_req, res) => {
 
 // Error handler
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error(err.stack);
+  logger.error('Unhandled error', err);
   res.status(500).json({ error: 'Internal server error' });
 });
 

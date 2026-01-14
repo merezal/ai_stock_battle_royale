@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { authenticate } from '../middleware/auth';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
@@ -114,7 +115,7 @@ router.post('/bids', async (req: Request, res: Response) => {
       remainingAvailableCash: availableCash - totalCost,
     });
   } catch (error) {
-    console.error(error);
+    logger.error('Error in trading route', error);
     return res.status(500).json({ error: 'Failed to place bid' });
   }
 });
@@ -250,7 +251,7 @@ router.post('/asks', async (req: Request, res: Response) => {
       remainingAvailableShares: availableShares - Number(shareCount),
     });
   } catch (error) {
-    console.error(error);
+    logger.error('Error in trading route', error);
     return res.status(500).json({ error: 'Failed to place ask' });
   }
 });
@@ -402,7 +403,7 @@ router.post('/bids/:bidId/fulfill', async (req: Request<{ bidId: string }>, res:
       newStockPrice: Number(transaction.pricePerShare),
     });
   } catch (error) {
-    console.error(error);
+    logger.error('Error in trading route', error);
     return res.status(500).json({ error: 'Failed to fulfill bid' });
   }
 });
@@ -552,7 +553,7 @@ router.post('/asks/:askId/fulfill', async (req: Request<{ askId: string }>, res:
       newStockPrice: Number(transaction.pricePerShare),
     });
   } catch (error) {
-    console.error(error);
+    logger.error('Error in trading route', error);
     return res.status(500).json({ error: 'Failed to fulfill ask' });
   }
 });
@@ -607,7 +608,7 @@ router.post('/bids/:bidId/cancel', async (req: Request<{ bidId: string }>, res: 
         : 0,
     });
   } catch (error) {
-    console.error(error);
+    logger.error('Error in trading route', error);
     return res.status(500).json({ error: 'Failed to cancel bid' });
   }
 });
@@ -672,7 +673,7 @@ router.post('/asks/:askId/cancel', async (req: Request<{ askId: string }>, res: 
         : 0,
     });
   } catch (error) {
-    console.error(error);
+    logger.error('Error in trading route', error);
     return res.status(500).json({ error: 'Failed to cancel ask' });
   }
 });
@@ -725,7 +726,7 @@ router.get('/orderbook', async (req: Request, res: Response) => {
       })),
     });
   } catch (error) {
-    console.error(error);
+    logger.error('Error in trading route', error);
     return res.status(500).json({ error: 'Failed to fetch order book' });
   }
 });
@@ -776,7 +777,7 @@ router.get('/transactions', async (req: Request, res: Response) => {
       }))
     );
   } catch (error) {
-    console.error(error);
+    logger.error('Error in trading route', error);
     return res.status(500).json({ error: 'Failed to fetch transactions' });
   }
 });
