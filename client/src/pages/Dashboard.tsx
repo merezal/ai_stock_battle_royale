@@ -46,9 +46,8 @@ export function Dashboard() {
   });
 
   const { data: transactions } = useQuery({
-    queryKey: ['transactions', user?.username],
-    queryFn: () => getTransactions(undefined, user?.username, 10),
-    enabled: user?.username !== undefined,
+    queryKey: ['transactions', 'all'],
+    queryFn: () => getTransactions(undefined, undefined, 15),
     refetchInterval: 10000,
   });
 
@@ -411,7 +410,10 @@ export function Dashboard() {
                       >
                         <div>
                           <div className="text-white font-medium">
-                            {bid.ticker} - {bid.shares} shares
+                            <Link to={`/companies/${bid.ticker}`} className="text-green-400 hover:text-green-300">
+                              {bid.ticker}
+                            </Link>
+                            {' '}- {bid.shares} shares
                           </div>
                           <div className="text-sm text-gray-400">
                             @ ${bid.pricePerShare.toLocaleString()} by{' '}
@@ -462,7 +464,10 @@ export function Dashboard() {
                       >
                         <div>
                           <div className="text-white font-medium">
-                            {ask.ticker} - {ask.shares} shares
+                            <Link to={`/companies/${ask.ticker}`} className="text-green-400 hover:text-green-300">
+                              {ask.ticker}
+                            </Link>
+                            {' '}- {ask.shares} shares
                           </div>
                           <div className="text-sm text-gray-400">
                             @ ${ask.pricePerShare.toLocaleString()} by{' '}
@@ -503,15 +508,15 @@ export function Dashboard() {
 
       {/* Recent Transactions */}
       <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-        <h2 className="text-xl font-semibold text-white mb-4">Your Recent Transactions</h2>
+        <h2 className="text-xl font-semibold text-white mb-4">Recent Market Transactions</h2>
         {transactions && transactions.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="text-left text-gray-400 text-sm border-b border-gray-700">
-                  <th className="pb-2">Type</th>
                   <th className="pb-2">Stock</th>
-                  <th className="pb-2">Counterparty</th>
+                  <th className="pb-2">Buyer</th>
+                  <th className="pb-2">Seller</th>
                   <th className="pb-2 text-right">Shares</th>
                   <th className="pb-2 text-right">Price</th>
                   <th className="pb-2 text-right">Total</th>
@@ -519,50 +524,39 @@ export function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {transactions.map((tx) => {
-                  const isBuyer = tx.buyer === user?.username;
-                  return (
-                    <tr key={tx.transactionId} className="border-b border-gray-700/50">
-                      <td className="py-2">
-                        <span
-                          className={`px-2 py-1 rounded text-xs font-medium ${
-                            isBuyer
-                              ? 'bg-green-900/50 text-green-400'
-                              : 'bg-red-900/50 text-red-400'
-                          }`}
-                        >
-                          {isBuyer ? 'BUY' : 'SELL'}
-                        </span>
-                      </td>
-                      <td className="py-2">
-                        <Link
-                          to={`/companies/${tx.ticker}`}
-                          className="text-green-400 hover:text-green-300 font-medium"
-                        >
-                          {tx.ticker}
-                        </Link>
-                      </td>
-                      <td className="py-2">
-                        <UserLink username={isBuyer ? tx.seller : tx.buyer} />
-                      </td>
-                      <td className="py-2 text-right text-white">{tx.shares}</td>
-                      <td className="py-2 text-right text-white">
-                        ${tx.pricePerShare.toLocaleString()}
-                      </td>
-                      <td className="py-2 text-right text-white font-medium">
-                        ${(tx.totalAmount ?? Number(tx.shares) * tx.pricePerShare).toLocaleString()}
-                      </td>
-                      <td className="py-2 text-right text-gray-400 text-sm">
-                        {new Date(tx.timestamp).toLocaleString()}
-                      </td>
-                    </tr>
-                  );
-                })}
+                {transactions.map((tx) => (
+                  <tr key={tx.transactionId} className="border-b border-gray-700/50">
+                    <td className="py-2">
+                      <Link
+                        to={`/companies/${tx.ticker}`}
+                        className="text-green-400 hover:text-green-300 font-medium"
+                      >
+                        {tx.ticker}
+                      </Link>
+                    </td>
+                    <td className="py-2">
+                      <UserLink username={tx.buyer} className="text-green-400" />
+                    </td>
+                    <td className="py-2">
+                      <UserLink username={tx.seller} className="text-red-400" />
+                    </td>
+                    <td className="py-2 text-right text-white">{tx.shares}</td>
+                    <td className="py-2 text-right text-white">
+                      ${tx.pricePerShare.toLocaleString()}
+                    </td>
+                    <td className="py-2 text-right text-white font-medium">
+                      ${(tx.totalAmount ?? Number(tx.shares) * tx.pricePerShare).toLocaleString()}
+                    </td>
+                    <td className="py-2 text-right text-gray-400 text-sm">
+                      {new Date(tx.timestamp).toLocaleString()}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         ) : (
-          <p className="text-gray-500">No transactions yet. Start trading to see your history here.</p>
+          <p className="text-gray-500">No transactions yet.</p>
         )}
       </div>
     </div>

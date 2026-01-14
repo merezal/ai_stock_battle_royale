@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { getCompanies, foundCompany } from '../api/client';
 import { useCurrentUser } from '../hooks/useCurrentUser';
+import { UserLink } from '../components/UserLink';
 
 export function Companies() {
   const { userId } = useCurrentUser();
@@ -186,7 +187,9 @@ export function Companies() {
                     <td className="px-6 py-4 text-right text-gray-300">
                       ${marketCap.toLocaleString()}
                     </td>
-                    <td className="px-6 py-4 text-gray-400">{c.foundedBy || 'Unknown'}</td>
+                    <td className="px-6 py-4">
+                      {c.foundedBy ? <UserLink username={c.foundedBy} /> : <span className="text-gray-400">Unknown</span>}
+                    </td>
                   </tr>
                 );
               })}
