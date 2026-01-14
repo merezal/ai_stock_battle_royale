@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { Prisma } from '@prisma/client';
 import { authenticate } from '../middleware/auth';
-import { sanitizeString, validateTicker } from '../lib/utils';
+import { sanitizeString, validateTicker, validateMinimumPrice } from '../lib/utils';
 import { logger } from '../lib/logger';
 
 const router = Router();
@@ -37,6 +37,12 @@ router.post('/found', authenticate, async (req: Request, res: Response) => {
 
     if (investment <= 0 || shares <= 0) {
       return res.status(400).json({ error: 'Investment and shares must be positive' });
+    }
+
+    // Validate that the initial price per share meets minimum threshold
+    const pricePerShare = investment / Number(shares);
+    if (!validateMinimumPrice(pricePerShare)) {
+      return res.status(400).json({ error: 'Price per share must be at least $0.01' });
     }
 
     // Get user with account
@@ -89,8 +95,6 @@ router.post('/found', authenticate, async (req: Request, res: Response) => {
 
       return company;
     });
-
-    const pricePerShare = investment / Number(shares);
 
     return res.status(201).json({
       success: true,

@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
+import { validateMinimumPrice } from '../lib/utils';
 
 // Tool definitions for MCP protocol
 export const toolDefinitions = [
@@ -554,7 +555,7 @@ export async function executePlaceBid(userId: number, bids: Array<{ ticker: stri
       return { error: `Shares and price must be positive. Got shares: ${bid.shares}, pricePerShare: ${bid.pricePerShare}` };
     }
 
-    if (bid.pricePerShare < 0.01) {
+    if (!validateMinimumPrice(bid.pricePerShare)) {
       return { error: `Price per share must be at least $0.01. Got: ${bid.pricePerShare}` };
     }
 
@@ -648,7 +649,7 @@ export async function executePlaceAsk(userId: number, asks: Array<{ ticker: stri
       return { error: `Shares and price must be positive. Got shares: ${ask.shares}, pricePerShare: ${ask.pricePerShare}` };
     }
 
-    if (ask.pricePerShare < 0.01) {
+    if (!validateMinimumPrice(ask.pricePerShare)) {
       return { error: `Price per share must be at least $0.01. Got: ${ask.pricePerShare}` };
     }
 

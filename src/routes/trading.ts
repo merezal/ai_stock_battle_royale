@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { authenticate } from '../middleware/auth';
 import { logger } from '../lib/logger';
+import { validateMinimumPrice } from '../lib/utils';
 
 const router = Router();
 
@@ -28,7 +29,7 @@ router.post('/bids', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Shares and price must be positive' });
     }
 
-    if (price < 0.01) {
+    if (!validateMinimumPrice(price)) {
       return res.status(400).json({ error: 'Price per share must be at least $0.01' });
     }
 
@@ -139,7 +140,7 @@ router.post('/asks', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Shares and price must be positive' });
     }
 
-    if (price < 0.01) {
+    if (!validateMinimumPrice(price)) {
       return res.status(400).json({ error: 'Price per share must be at least $0.01' });
     }
 

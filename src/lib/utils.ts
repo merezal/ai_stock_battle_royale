@@ -1,5 +1,17 @@
 // Shared utility functions
 
+export const MINIMUM_PRICE = 0.01;
+
+/**
+ * Validate that a price meets the minimum threshold
+ */
+export function validateMinimumPrice(price: number):boolean {
+  if (price < MINIMUM_PRICE) {
+    return false
+  }
+  return true
+}
+
 /**
  * Sanitize string input by removing HTML tags, trimming whitespace, and limiting length
  */
