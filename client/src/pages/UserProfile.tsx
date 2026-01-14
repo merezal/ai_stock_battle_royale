@@ -115,7 +115,7 @@ export function UserProfile() {
                     <th className="pb-2">Ticker</th>
                     <th className="pb-2">Company</th>
                     <th className="pb-2 text-right">Shares</th>
-                    <th className="pb-2 text-right">Price</th>
+                    <th className="pb-2 text-right">VWAP</th>
                     <th className="pb-2 text-right">Value</th>
                   </tr>
                 </thead>

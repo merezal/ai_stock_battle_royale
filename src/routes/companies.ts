@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma';
 import { Prisma } from '@prisma/client';
 import { authenticate } from '../middleware/auth';
 import { sanitizeString, validateTicker, validateMinimumPrice } from '../lib/utils';
+import { getVWAPPrice } from '../lib/pricing';
 import { logger } from '../lib/logger';
 
 const router = Router();
@@ -126,29 +127,29 @@ router.get('/', async (_req: Request, res: Response) => {
         founder: {
           select: { username: true },
         },
-        transactions: {
-          orderBy: { timestamp: 'desc' },
-          take: 1,
-        },
       },
     });
 
-    const result = companies.map(c => {
-      const lastTransaction = c.transactions[0];
-      // Price adjusted for splits: transactionPrice * (company.splitMultiplier / transaction.splitMultiplier)
-      const currentPrice = lastTransaction
-        ? Number(lastTransaction.pricePerShare) * (Number(c.splitMultiplier) / Number(lastTransaction.splitMultiplier))
-        : Number(c.foundingCost) / Number(c.totalSharesIssued);
+    // Calculate VWAP for each company in parallel
+    const result = await Promise.all(
+      companies.map(async (c) => {
+        const currentPrice = await getVWAPPrice({
+          companyId: c.id,
+          foundingCost: c.foundingCost ? Number(c.foundingCost) : null,
+          totalSharesIssued: c.totalSharesIssued,
+          splitMultiplier: Number(c.splitMultiplier),
+        });
 
-      return {
-        ticker: c.tickerSymbol,
-        companyName: c.companyName,
-        currentPrice,
-        totalSharesIssued: c.totalSharesIssued.toString(),
-        foundedBy: c.founder?.username || null,
-        createdAt: c.createdAt,
-      };
-    });
+        return {
+          ticker: c.tickerSymbol,
+          companyName: c.companyName,
+          currentPrice,
+          totalSharesIssued: c.totalSharesIssued.toString(),
+          foundedBy: c.founder?.username || null,
+          createdAt: c.createdAt,
+        };
+      })
+    );
 
     return res.json(result);
   } catch (error) {
@@ -188,19 +189,28 @@ router.get('/:ticker', async (req: Request<{ ticker: string }>, res: Response) =
       return res.status(404).json({ error: 'Company not found' });
     }
 
-    const lastTransaction = company.transactions[0];
-    // Price adjusted for splits: transactionPrice * (company.splitMultiplier / transaction.splitMultiplier)
-    const currentPrice = lastTransaction
-      ? Number(lastTransaction.pricePerShare) * (Number(company.splitMultiplier) / Number(lastTransaction.splitMultiplier))
-      : Number(company.foundingCost) / Number(company.totalSharesIssued);
-
-    // Also include split-adjusted prices for recent transactions
+    // Use VWAP for current price
     const companySplitMultiplier = Number(company.splitMultiplier);
+    const currentPrice = await getVWAPPrice({
+      companyId: company.id,
+      foundingCost: company.foundingCost ? Number(company.foundingCost) : null,
+      totalSharesIssued: company.totalSharesIssued,
+      splitMultiplier: companySplitMultiplier,
+    });
+
+    const lastTransaction = company.transactions[0];
+
+    // Calculate founding price (adjusted for splits)
+    const foundingPrice = company.foundingCost
+      ? Number(company.foundingCost) / (Number(company.totalSharesIssued) * companySplitMultiplier)
+      : null;
 
     return res.json({
       ticker: company.tickerSymbol,
       companyName: company.companyName,
       currentPrice,
+      foundingPrice,
+      foundedAt: company.createdAt,
       lastTradeTime: lastTransaction?.timestamp || null,
       totalSharesIssued: company.totalSharesIssued.toString(),
       foundedBy: company.founder?.username || null,
@@ -260,14 +270,12 @@ router.post('/:ticker/split', authenticate, async (req: Request<{ ticker: string
 
     // Check if stock price after split would be below minimum (0.01)
     // A 2:1 split halves the price, so we need currentPrice > 0.02 to ensure post-split price > 0.01
-    const lastTransaction = await prisma.transaction.findFirst({
-      where: { companyId: company.id },
-      orderBy: { timestamp: 'desc' },
+    const currentPrice = await getVWAPPrice({
+      companyId: company.id,
+      foundingCost: company.foundingCost ? Number(company.foundingCost) : null,
+      totalSharesIssued: company.totalSharesIssued,
+      splitMultiplier: Number(company.splitMultiplier),
     });
-
-    const currentPrice = lastTransaction
-      ? Number(lastTransaction.pricePerShare) * (Number(company.splitMultiplier) / Number(lastTransaction.splitMultiplier))
-      : Number(company.foundingCost) / Number(company.totalSharesIssued);
 
     const priceAfterSplit = currentPrice / 2;
 

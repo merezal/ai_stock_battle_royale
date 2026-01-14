@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 import { validateMinimumPrice } from '../lib/utils';
+import { getVWAPPrice } from '../lib/pricing';
 
 // Tool definitions for MCP protocol
 export const toolDefinitions = [
@@ -235,31 +236,24 @@ export const toolDefinitions = [
   },
 ];
 
-// Helper to get current price for a company (adjusted for splits)
+// Helper to get current VWAP price for a company (adjusted for splits)
 async function getCurrentPrice(companyId: number, foundingCost: number | null, totalShares: bigint, companySplitMultiplier?: number): Promise<number> {
-  const company = await prisma.company.findUnique({
-    where: { id: companyId },
-    select: { splitMultiplier: true },
-  });
-
-  const splitMultiplier = companySplitMultiplier ?? Number(company?.splitMultiplier ?? 1);
-
-  const lastTransaction = await prisma.transaction.findFirst({
-    where: { companyId },
-    orderBy: { timestamp: 'desc' },
-  });
-
-  if (lastTransaction) {
-    // Price adjusted for splits: transactionPrice * (company.splitMultiplier / transaction.splitMultiplier)
-    return Number(lastTransaction.pricePerShare) * (splitMultiplier / Number(lastTransaction.splitMultiplier));
+  // If splitMultiplier not provided, fetch it
+  let splitMultiplier = companySplitMultiplier;
+  if (splitMultiplier === undefined) {
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { splitMultiplier: true },
+    });
+    splitMultiplier = Number(company?.splitMultiplier ?? 1);
   }
 
-  // No transactions yet, use founding price
-  if (foundingCost) {
-    return Number(foundingCost) / Number(totalShares);
-  }
-
-  return 0;
+  return getVWAPPrice({
+    companyId,
+    foundingCost,
+    totalSharesIssued: totalShares,
+    splitMultiplier,
+  });
 }
 
 // Tool execution functions

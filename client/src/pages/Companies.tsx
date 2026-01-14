@@ -148,7 +148,7 @@ export function Companies() {
               <tr className="text-left text-gray-400 text-sm bg-gray-700/50">
                 <th className="px-6 py-3">Ticker</th>
                 <th className="px-6 py-3">Company Name</th>
-                <th className="px-6 py-3 text-right">Price</th>
+                <th className="px-6 py-3 text-right">VWAP</th>
                 <th className="px-6 py-3 text-right">Shares Issued</th>
                 <th className="px-6 py-3 text-right">Market Cap</th>
                 <th className="px-6 py-3">Founded By</th>

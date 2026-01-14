@@ -41,6 +41,8 @@ export interface Company {
   ticker: string;
   companyName: string;
   currentPrice: number;
+  foundingPrice?: number | null;
+  foundedAt?: string;
   totalSharesIssued: string;
   foundedBy: string | null;
   createdAt?: string;

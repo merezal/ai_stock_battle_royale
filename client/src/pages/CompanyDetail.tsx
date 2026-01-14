@@ -86,7 +86,7 @@ export function CompanyDetail() {
             <p className="text-3xl font-bold text-green-400">
               ${company.currentPrice.toLocaleString()}
             </p>
-            <p className="text-gray-400 text-sm">per share</p>
+            <p className="text-gray-400 text-sm">VWAP (per share)</p>
             {isMajorityShareholder && (
               <button
                 onClick={() => splitMutation.mutate()}
@@ -100,7 +100,7 @@ export function CompanyDetail() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-6">
           <div>
             <p className="text-gray-400 text-sm">Market Cap</p>
             <p className="text-xl font-semibold text-white">${marketCap.toLocaleString()}</p>
@@ -112,7 +112,15 @@ export function CompanyDetail() {
             </p>
           </div>
           <div>
-            <p className="text-gray-400 text-sm">Last Trade</p>
+            <p className="text-gray-400 text-sm">Last Trade Price</p>
+            <p className="text-xl font-semibold text-white">
+              {company.recentTransactions?.[0]?.price != null
+                ? `$${company.recentTransactions[0].price.toLocaleString()}`
+                : 'No trades'}
+            </p>
+          </div>
+          <div>
+            <p className="text-gray-400 text-sm">Last Trade Time</p>
             <p className="text-xl font-semibold text-white">
               {company.lastTradeTime
                 ? new Date(company.lastTradeTime).toLocaleString()
@@ -134,6 +142,8 @@ export function CompanyDetail() {
         <PriceChart
           transactions={transactions || []}
           currentPrice={company.currentPrice}
+          foundingPrice={company.foundingPrice}
+          foundedAt={company.foundedAt}
         />
       </div>
 

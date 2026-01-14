@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import { hashPassword, verifyPassword, generateToken, validatePassword } from '../lib/auth';
 import { authenticate, authorizeUser } from '../middleware/auth';
 import { validateUsername } from '../lib/utils';
+import { getVWAPPrice } from '../lib/pricing';
 import { logger } from '../lib/logger';
 
 const router = Router();
@@ -128,14 +129,7 @@ router.get('/by-username/:username/portfolio', async (req: Request<{ username: s
         account: true,
         stockHoldings: {
           include: {
-            company: {
-              include: {
-                transactions: {
-                  orderBy: { timestamp: 'desc' },
-                  take: 1,
-                },
-              },
-            },
+            company: true,
           },
         },
       },
@@ -146,15 +140,17 @@ router.get('/by-username/:username/portfolio', async (req: Request<{ username: s
     }
 
     let stockValue = 0;
-    const holdings = user.stockHoldings
-      .filter(h => Number(h.sharesOwned) > 0)
-      .map(h => {
-        const lastTransaction = h.company.transactions[0];
-        // Price adjusted for splits: transactionPrice * (company.splitMultiplier / transaction.splitMultiplier)
-        const companySplitMultiplier = Number(h.company.splitMultiplier);
-        const currentPrice = lastTransaction
-          ? Number(lastTransaction.pricePerShare) * (companySplitMultiplier / Number(lastTransaction.splitMultiplier))
-          : Number(h.company.foundingCost) / Number(h.company.totalSharesIssued);
+    const holdingsWithShares = user.stockHoldings.filter(h => Number(h.sharesOwned) > 0);
+
+    // Calculate VWAP for each holding in parallel
+    const holdings = await Promise.all(
+      holdingsWithShares.map(async (h) => {
+        const currentPrice = await getVWAPPrice({
+          companyId: h.company.id,
+          foundingCost: h.company.foundingCost ? Number(h.company.foundingCost) : null,
+          totalSharesIssued: h.company.totalSharesIssued,
+          splitMultiplier: Number(h.company.splitMultiplier),
+        });
         const positionValue = Number(h.sharesOwned) * currentPrice;
         stockValue += positionValue;
 
@@ -167,7 +163,8 @@ router.get('/by-username/:username/portfolio', async (req: Request<{ username: s
           currentPrice,
           positionValue,
         };
-      });
+      })
+    );
 
     const cashBalance = Number(user.account.cashBalance);
     const reservedCash = Number(user.account.reservedCash);
@@ -247,14 +244,7 @@ router.get('/:id/portfolio', async (req: Request<{ id: string }>, res: Response)
         account: true,
         stockHoldings: {
           include: {
-            company: {
-              include: {
-                transactions: {
-                  orderBy: { timestamp: 'desc' },
-                  take: 1,
-                },
-              },
-            },
+            company: true,
           },
         },
       },
@@ -265,15 +255,17 @@ router.get('/:id/portfolio', async (req: Request<{ id: string }>, res: Response)
     }
 
     let stockValue = 0;
-    const holdings = user.stockHoldings
-      .filter(h => Number(h.sharesOwned) > 0)
-      .map(h => {
-        const lastTransaction = h.company.transactions[0];
-        // Price adjusted for splits: transactionPrice * (company.splitMultiplier / transaction.splitMultiplier)
-        const companySplitMultiplier = Number(h.company.splitMultiplier);
-        const currentPrice = lastTransaction
-          ? Number(lastTransaction.pricePerShare) * (companySplitMultiplier / Number(lastTransaction.splitMultiplier))
-          : Number(h.company.foundingCost) / Number(h.company.totalSharesIssued);
+    const holdingsWithShares = user.stockHoldings.filter(h => Number(h.sharesOwned) > 0);
+
+    // Calculate VWAP for each holding in parallel
+    const holdings = await Promise.all(
+      holdingsWithShares.map(async (h) => {
+        const currentPrice = await getVWAPPrice({
+          companyId: h.company.id,
+          foundingCost: h.company.foundingCost ? Number(h.company.foundingCost) : null,
+          totalSharesIssued: h.company.totalSharesIssued,
+          splitMultiplier: Number(h.company.splitMultiplier),
+        });
         const positionValue = Number(h.sharesOwned) * currentPrice;
         stockValue += positionValue;
 
@@ -286,7 +278,8 @@ router.get('/:id/portfolio', async (req: Request<{ id: string }>, res: Response)
           currentPrice,
           positionValue,
         };
-      });
+      })
+    );
 
     const cashBalance = Number(user.account.cashBalance);
     const reservedCash = Number(user.account.reservedCash);
@@ -315,43 +308,42 @@ router.get('/', async (_req: Request, res: Response) => {
         account: true,
         stockHoldings: {
           include: {
-            company: {
-              include: {
-                transactions: {
-                  orderBy: { timestamp: 'desc' },
-                  take: 1,
-                },
-              },
-            },
+            company: true,
           },
         },
       },
     });
 
-    const leaderboard = users.map(user => {
-      let stockValue = 0;
-      user.stockHoldings
-        .filter(h => Number(h.sharesOwned) > 0)
-        .forEach(h => {
-          const lastTransaction = h.company.transactions[0];
-          // Price adjusted for splits: transactionPrice * (company.splitMultiplier / transaction.splitMultiplier)
-          const companySplitMultiplier = Number(h.company.splitMultiplier);
-          const currentPrice = lastTransaction
-            ? Number(lastTransaction.pricePerShare) * (companySplitMultiplier / Number(lastTransaction.splitMultiplier))
-            : Number(h.company.foundingCost) / Number(h.company.totalSharesIssued);
-          stockValue += Number(h.sharesOwned) * currentPrice;
-        });
+    // Calculate stock values for all users in parallel
+    const leaderboard = await Promise.all(
+      users.map(async (user) => {
+        const holdingsWithShares = user.stockHoldings.filter(h => Number(h.sharesOwned) > 0);
 
-      const cashBalance = Number(user.account?.cashBalance || 0);
+        // Calculate VWAP for each holding
+        const holdingValues = await Promise.all(
+          holdingsWithShares.map(async (h) => {
+            const currentPrice = await getVWAPPrice({
+              companyId: h.company.id,
+              foundingCost: h.company.foundingCost ? Number(h.company.foundingCost) : null,
+              totalSharesIssued: h.company.totalSharesIssued,
+              splitMultiplier: Number(h.company.splitMultiplier),
+            });
+            return Number(h.sharesOwned) * currentPrice;
+          })
+        );
 
-      return {
-        id: user.id,
-        username: user.username,
-        cashBalance,
-        stockValue,
-        totalValue: cashBalance + stockValue,
-      };
-    });
+        const stockValue = holdingValues.reduce((sum, val) => sum + val, 0);
+        const cashBalance = Number(user.account?.cashBalance || 0);
+
+        return {
+          id: user.id,
+          username: user.username,
+          cashBalance,
+          stockValue,
+          totalValue: cashBalance + stockValue,
+        };
+      })
+    );
 
     leaderboard.sort((a, b) => b.totalValue - a.totalValue);
 
@@ -444,30 +436,29 @@ router.get('/by-username/:username/portfolio-history', async (req: Request<{ use
         account: true,
         stockHoldings: {
           include: {
-            company: {
-              include: {
-                transactions: {
-                  orderBy: { timestamp: 'desc' },
-                  take: 1,
-                },
-              },
-            },
+            company: true,
           },
         },
       },
     });
 
     if (currentUser && currentUser.account) {
-      let currentStockValue = 0;
-      for (const h of currentUser.stockHoldings.filter(h => Number(h.sharesOwned) > 0)) {
-        const lastTx = h.company.transactions[0];
-        // Price adjusted for splits: transactionPrice * (company.splitMultiplier / transaction.splitMultiplier)
-        const companySplitMultiplier = Number(h.company.splitMultiplier);
-        const price = lastTx
-          ? Number(lastTx.pricePerShare) * (companySplitMultiplier / Number(lastTx.splitMultiplier))
-          : Number(h.company.foundingCost) / Number(h.company.totalSharesIssued);
-        currentStockValue += Number(h.sharesOwned) * price;
-      }
+      const holdingsWithShares = currentUser.stockHoldings.filter(h => Number(h.sharesOwned) > 0);
+
+      // Calculate VWAP for each holding
+      const holdingValues = await Promise.all(
+        holdingsWithShares.map(async (h) => {
+          const price = await getVWAPPrice({
+            companyId: h.company.id,
+            foundingCost: h.company.foundingCost ? Number(h.company.foundingCost) : null,
+            totalSharesIssued: h.company.totalSharesIssued,
+            splitMultiplier: Number(h.company.splitMultiplier),
+          });
+          return Number(h.sharesOwned) * price;
+        })
+      );
+
+      const currentStockValue = holdingValues.reduce((sum, val) => sum + val, 0);
 
       history.push({
         timestamp: new Date().toISOString(),
