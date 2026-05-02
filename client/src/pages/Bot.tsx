@@ -15,28 +15,272 @@ import {
   type BotStatus,
 } from '../api/client';
 
+// ── Terminal primitives ────────────────────────────────────────
+
+function TBtn({ children, onClick, variant = 'primary', disabled = false, style }: {
+  children: React.ReactNode; onClick?: () => void;
+  variant?: 'primary' | 'ghost' | 'minimal'; disabled?: boolean;
+  style?: React.CSSProperties;
+}) {
+  const variants: Record<string, React.CSSProperties> = {
+    primary: { background: 'var(--fg)', color: 'var(--bg)', borderColor: 'var(--fg)' },
+    ghost:   { background: 'transparent', color: 'var(--fg)', borderColor: 'var(--border-strong)' },
+    minimal: { background: 'transparent', color: 'var(--fg-muted)', borderColor: 'transparent' },
+  };
+  return (
+    <button onClick={disabled ? undefined : onClick} style={{
+      fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 11,
+      letterSpacing: '0.08em', textTransform: 'uppercase',
+      height: 36, padding: '0 16px', borderRadius: 0,
+      border: '1px solid', cursor: disabled ? 'not-allowed' : 'pointer',
+      opacity: disabled ? 0.4 : 1,
+      transition: 'opacity var(--dur-1) var(--ease-out)',
+      ...variants[variant], ...style,
+    }}>{children}</button>
+  );
+}
+
+// ── Mandate Composer Modal ─────────────────────────────────────
+
+function MandateComposer({
+  open,
+  promptText,
+  onTextChange,
+  isActive,
+  onClose,
+  onSave,
+  onToggle,
+  onRunOnce,
+  saving,
+  running,
+  version,
+  lastModified,
+  hasChanges,
+}: {
+  open: boolean;
+  promptText: string;
+  onTextChange: (v: string) => void;
+  isActive: boolean;
+  onClose: () => void;
+  onSave: () => void;
+  onToggle: (v: boolean) => void;
+  onRunOnce: () => void;
+  saving: boolean;
+  running: boolean;
+  version?: number;
+  lastModified?: string;
+  hasChanges: boolean;
+}) {
+  if (!open) return null;
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, zIndex: 100,
+        background: 'rgb(var(--bg-rgb) / 0.6)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}
+      onClick={onClose}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          width: 600, background: 'var(--bg)',
+          border: '1px solid var(--border-strong)',
+          boxShadow: 'var(--elev-2)',
+          display: 'flex', flexDirection: 'column',
+        }}
+      >
+        {/* Modal header */}
+        <div style={{
+          padding: '14px 20px', borderBottom: '1px solid var(--border)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        }}>
+          <span className="t-mark" style={{ fontSize: 13 }}>Compose mandate</span>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            {version && (
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-muted)' }}>
+                v{version}
+              </span>
+            )}
+            <button onClick={onClose} style={{ background: 0, border: 0, color: 'var(--fg-muted)', fontFamily: 'var(--font-mono)', cursor: 'pointer', fontSize: 14 }}>✕</button>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Textarea */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label className="t-label">Mandate</label>
+            <textarea
+              value={promptText}
+              onChange={e => onTextChange(e.target.value)}
+              rows={10}
+              placeholder="Acquire TICKER below the 24h median. Hold for 6 hours. Liquidate on a 3% drawdown from peak. Do not exceed 8% of total exposure."
+              style={{
+                fontFamily: 'var(--font-mono)', fontSize: 13,
+                background: 'var(--bg-elevated)', border: '1px solid var(--border-strong)',
+                color: 'var(--fg)', padding: '10px 12px', borderRadius: 0,
+                outline: 0, width: '100%', resize: 'vertical', minHeight: 180,
+              }}
+            />
+          </div>
+
+          {/* Info block */}
+          <div style={{
+            fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-muted)',
+            padding: 12, background: 'var(--bg-sunken)', border: '1px solid var(--border)',
+          }}>
+            ∴ Mandates run as natural-language prompts on the trading agent. Specify entity, conditions, and limits.{' '}
+            <span style={{ color: 'var(--fg)' }}>Be explicit.</span>{' '}
+            The agent does not infer.
+          </div>
+
+          {/* Status row */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-muted)' }}>
+              {hasChanges
+                ? <span style={{ color: 'var(--state-warn)' }}>◼ Unsaved changes</span>
+                : lastModified
+                ? `Last saved ${new Date(lastModified).toLocaleString()}`
+                : '∅ Not saved yet'}
+            </div>
+            {/* Active toggle */}
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+              <span className="t-label">Deploy on cycle</span>
+              <div
+                onClick={() => onToggle(!isActive)}
+                style={{
+                  width: 36, height: 20, borderRadius: 0,
+                  background: isActive ? 'var(--fg)' : 'var(--bg-sunken)',
+                  border: '1px solid var(--border-strong)',
+                  position: 'relative', cursor: 'pointer',
+                  transition: 'background var(--dur-1) var(--ease-out)',
+                }}
+              >
+                <div style={{
+                  position: 'absolute', top: 2,
+                  left: isActive ? 'calc(100% - 18px)' : 2,
+                  width: 14, height: 14,
+                  background: isActive ? 'var(--bg)' : 'var(--fg-muted)',
+                  transition: 'left var(--dur-2) var(--ease-out)',
+                }} />
+              </div>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: isActive ? 'var(--fg)' : 'var(--fg-muted)' }}>
+                {isActive ? 'Active' : 'Inactive'}
+              </span>
+            </label>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{
+          padding: '14px 20px', borderTop: '1px solid var(--border)',
+          display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center',
+        }}>
+          <TBtn variant="ghost" onClick={onRunOnce} disabled={running || !promptText}>
+            {running ? 'Running...' : 'Run once'}
+          </TBtn>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <TBtn variant="ghost" onClick={onClose}>Cancel</TBtn>
+            <TBtn onClick={onSave} disabled={!hasChanges || saving}>
+              {saving ? 'Saving...' : 'Save mandate →'}
+            </TBtn>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Log entry ──────────────────────────────────────────────────
+
+function LogEntry({ log, expanded, onToggle }: { log: BotActivityLog; expanded: boolean; onToggle: () => void }) {
+  const isThought = log.actionType === 'assistant_message';
+  const content = isThought ? (log.result as { content?: string })?.content ?? '' : null;
+  const lines = content?.split('\n') ?? [];
+  const shouldTruncate = lines.length > 4;
+  const displayContent = expanded || !shouldTruncate ? content : lines.slice(0, 4).join('\n');
+
+  const hasError = (log.result as { error?: string })?.error;
+  const isSuccess = (log.result as { success?: boolean })?.success;
+
+  return (
+    <div
+      onClick={isThought ? onToggle : undefined}
+      style={{
+        padding: '10px 14px',
+        borderBottom: '1px solid var(--border)',
+        cursor: isThought ? 'pointer' : 'default',
+        background: isThought ? 'var(--bg-elevated)' : 'transparent',
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: isThought ? 8 : 0 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span style={{
+            fontFamily: 'var(--font-display)', fontSize: 10, fontWeight: 500,
+            letterSpacing: '0.08em', textTransform: 'uppercase',
+            color: isThought ? 'var(--fg-muted)' : hasError ? 'var(--state-loss)' : isSuccess === false ? 'var(--state-loss)' : 'var(--fg)',
+          }}>
+            {isThought ? 'AI reasoning' : log.actionType}
+          </span>
+          {isThought && shouldTruncate && (
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-subtle)' }}>
+              {expanded ? '▲ collapse' : '▼ expand'}
+            </span>
+          )}
+        </div>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-subtle)' }}>
+          {new Date(log.timestamp).toLocaleString()}
+        </span>
+      </div>
+
+      {isThought && displayContent && (
+        <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--fg-muted)', whiteSpace: 'pre-wrap', margin: 0, lineHeight: 1.5 }}>
+          {displayContent}
+          {!expanded && shouldTruncate && <span style={{ color: 'var(--fg-subtle)' }}>...</span>}
+        </p>
+      )}
+
+      {!isThought && (
+        <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
+          {log.actionDetails && Object.keys(log.actionDetails).length > 0 && (
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-subtle)' }}>
+              {JSON.stringify(log.actionDetails)}
+            </span>
+          )}
+          {hasError && (
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--state-loss)' }}>
+              ERR / {(log.result as { error: string }).error}
+            </span>
+          )}
+          {isSuccess === true && (
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-muted)' }}>◼ ok</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Bot / Mandates page ────────────────────────────────────────
+
 export function Bot() {
   const { user } = useCurrentUser();
   const queryClient = useQueryClient();
   const [promptText, setPromptText] = useState('');
   const [hasChanges, setHasChanges] = useState(false);
   const [initialLoaded, setInitialLoaded] = useState(false);
-  const [expandedMessages, setExpandedMessages] = useState<Set<number>>(new Set());
-  const [runResult, setRunResult] = useState<{
-    success?: boolean;
-    error?: string;
-    toolCallCount?: number;
-    executionLog?: Array<{ action: string; result: unknown }>;
-  } | null>(null);
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [expandedLogs, setExpandedLogs] = useState<Set<number>>(new Set());
+  const [runResult, setRunResult] = useState<{ success?: boolean; error?: string; toolCallCount?: number } | null>(null);
 
-  // Fetch current prompt
   const { data: botPrompt, isLoading: promptLoading } = useQuery<BotPrompt>({
     queryKey: ['botPrompt', user?.id],
     queryFn: getBotPrompt,
     enabled: !!user?.id,
   });
 
-  // Sync prompt text from server on initial load
   useEffect(() => {
     if (botPrompt && !initialLoaded) {
       setPromptText(botPrompt.promptText);
@@ -44,28 +288,24 @@ export function Bot() {
     }
   }, [botPrompt, initialLoaded]);
 
-  // Fetch available tools
   const { data: tools } = useQuery<BotTool[]>({
     queryKey: ['botTools'],
     queryFn: getBotTools,
   });
 
-  // Fetch bot status
   const { data: botStatus } = useQuery<BotStatus>({
     queryKey: ['botStatus'],
     queryFn: getBotStatus,
-    refetchInterval: 2000, // Poll more frequently to show queue updates
+    refetchInterval: 3000,
   });
 
-  // Fetch activity logs
-  const { data: logs, isLoading: logsLoading } = useQuery<BotActivityLog[]>({
+  const { data: logs = [], isLoading: logsLoading } = useQuery<BotActivityLog[]>({
     queryKey: ['botLogs', user?.id],
-    queryFn: () => getBotLogs(30),
+    queryFn: () => getBotLogs(40),
     enabled: !!user?.id,
     refetchInterval: 10000,
   });
 
-  // Save prompt mutation
   const saveMutation = useMutation({
     mutationFn: () => saveBotPrompt(promptText),
     onSuccess: () => {
@@ -74,7 +314,6 @@ export function Bot() {
     },
   });
 
-  // Toggle mutation
   const toggleMutation = useMutation({
     mutationFn: (isActive: boolean) => toggleBot(isActive),
     onSuccess: () => {
@@ -83,386 +322,216 @@ export function Bot() {
     },
   });
 
-  // Run once mutation
   const runOnceMutation = useMutation({
     mutationFn: runBotOnce,
     onSuccess: (result) => {
       setRunResult(result);
       queryClient.invalidateQueries({ queryKey: ['botLogs', user?.id] });
-      queryClient.invalidateQueries({ queryKey: ['portfolio', user?.id] });
     },
   });
 
+  const handleTextChange = (v: string) => {
+    setPromptText(v);
+    setHasChanges(v !== (botPrompt?.promptText ?? ''));
+  };
+
   if (!user) {
     return (
-      <div className="text-center py-12">
-        <h1 className="text-2xl font-bold text-white mb-4">AI Trading Bot</h1>
-        <p className="text-gray-400">Please log in to configure your trading bot.</p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--fg-muted)' }}>
+        ∅ Authentication required.
       </div>
     );
   }
 
   if (promptLoading) {
     return (
-      <div className="text-center py-12">
-        <p className="text-gray-400">Loading...</p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--fg-muted)' }}>
+        Loading...
       </div>
     );
   }
 
-  const handlePromptChange = (value: string) => {
-    setPromptText(value);
-    setHasChanges(value !== (botPrompt?.promptText || ''));
-  };
-
-  const toggleMessageExpanded = (logId: number) => {
-    setExpandedMessages((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(logId)) {
-        newSet.delete(logId);
-      } else {
-        newSet.add(logId);
-      }
-      return newSet;
-    });
-  };
-
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-white">AI Trading Bot</h1>
-        {botStatus && (
-          <div className="flex items-center space-x-4">
-            <span
-              className={`px-3 py-1 rounded-full text-sm font-medium ${
-                botStatus.loopRunning
-                  ? 'bg-green-900/50 text-green-400'
-                  : 'bg-gray-700 text-gray-400'
-              }`}
-            >
-              {botStatus.loopRunning ? 'System Running' : 'System Paused'}
-            </span>
-            <span className="text-gray-500 text-sm">
-              {botStatus.activeBotsCount} active bots
-            </span>
-          </div>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Sub-header */}
+      <div style={{
+        display: 'flex', alignItems: 'center',
+        padding: '10px 16px', borderBottom: '1px solid var(--border)',
+        gap: 16, flexShrink: 0,
+      }}>
+        <span className="t-mark" style={{ fontSize: 14 }}>Mandates</span>
+        <span style={{ color: 'var(--fg-subtle)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>/</span>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--fg-muted)' }}>
+          Agent: <span style={{ color: botPrompt?.isActive ? 'var(--fg)' : 'var(--fg-muted)' }}>
+            {botPrompt?.isActive ? '◼ active' : '◻ inactive'}
+          </span>
+        </span>
+        {botStatus?.currentBot && (
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-muted)' }}>
+            · executing: <span style={{ color: 'var(--fg)' }}>{botStatus.currentBot.username}</span>
+          </span>
         )}
+        <span style={{ flex: 1 }} />
+        <TBtn onClick={() => setComposerOpen(true)}>
+          {botPrompt?.promptId ? 'Edit mandate →' : '+ New mandate'}
+        </TBtn>
       </div>
 
-      {/* Execution Queue */}
-      {botStatus && (botStatus.isExecuting || botStatus.queue.length > 0 || botStatus.currentBot) && (
-        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-          <h2 className="text-xl font-semibold text-white mb-4">Execution Queue</h2>
-          <div className="space-y-3">
-            {/* Currently Executing */}
-            {botStatus.currentBot && (
-              <div className="flex items-center space-x-3 bg-green-900/30 border border-green-700 rounded-lg px-4 py-3">
-                <div className="relative">
-                  <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-                </div>
-                <span className="text-green-400 font-medium">Currently Executing:</span>
-                <span className="text-white">{botStatus.currentBot.username}</span>
+      {/* Content */}
+      <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+        {/* Main area */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
+          {/* Current mandate preview */}
+          <div style={{ padding: 16, borderBottom: '1px solid var(--border)' }}>
+            <div className="t-label" style={{ marginBottom: 12 }}>Current mandate</div>
+            {botPrompt?.promptText ? (
+              <pre style={{
+                fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--fg-muted)',
+                background: 'var(--bg-sunken)', border: '1px solid var(--border)',
+                padding: 16, margin: 0, whiteSpace: 'pre-wrap', lineHeight: 1.6,
+                maxHeight: 200, overflow: 'auto',
+              }}>
+                {botPrompt.promptText}
+              </pre>
+            ) : (
+              <div style={{
+                fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--fg-subtle)',
+                padding: 16, background: 'var(--bg-sunken)', border: '1px solid var(--border)',
+              }}>
+                ∅ No mandate configured. Deploy an agent to begin.
               </div>
             )}
-
-            {/* Queue */}
-            {botStatus.queue.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-gray-400 text-sm">Waiting in queue:</p>
-                {botStatus.queue.map((bot, index) => (
-                  <div
-                    key={bot.userId}
-                    className="flex items-center space-x-3 bg-gray-700/50 rounded-lg px-4 py-2"
-                  >
-                    <span className="text-gray-500 font-mono text-sm w-6">{index + 1}.</span>
-                    <span className="text-gray-300">{bot.username}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* No activity */}
-            {!botStatus.currentBot && botStatus.queue.length === 0 && (
-              <p className="text-gray-500">No bots currently executing</p>
-            )}
-
-            {/* Last cycle info */}
-            {botStatus.lastCycleEnd && (
-              <p className="text-gray-500 text-sm mt-2">
-                Last cycle completed: {new Date(botStatus.lastCycleEnd).toLocaleString()}
-              </p>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Bot Status & Controls */}
-      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-xl font-semibold text-white">Bot Status</h2>
-            <p className="text-gray-400 text-sm mt-1">
-              {botPrompt?.isActive
-                ? 'Your bot is active and will execute on the next cycle'
-                : 'Your bot is inactive'}
-            </p>
-          </div>
-          <div className="flex items-center space-x-4">
-            {/* Toggle Switch */}
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={botPrompt?.isActive || false}
-                onChange={(e) => toggleMutation.mutate(e.target.checked)}
-                disabled={toggleMutation.isPending || !botPrompt?.promptId}
-                className="sr-only peer"
-              />
-              <div className="w-14 h-7 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-green-600"></div>
-              <span className="ml-3 text-sm font-medium text-gray-300">
-                {botPrompt?.isActive ? 'Active' : 'Inactive'}
-              </span>
-            </label>
-          </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex space-x-4">
-          <button
-            onClick={() => runOnceMutation.mutate()}
-            disabled={runOnceMutation.isPending || !botPrompt?.promptId}
-            className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md text-sm font-medium"
-          >
-            {runOnceMutation.isPending ? 'Running...' : 'Run Once'}
-          </button>
-          {!botPrompt?.promptId && (
-            <p className="text-yellow-500 text-sm self-center">
-              Save a prompt first to enable bot controls
-            </p>
-          )}
-        </div>
-      </div>
-
-      {/* Run Result */}
-      {runResult && (
-        <div
-          className={`rounded-lg p-4 border ${
-            runResult.success
-              ? 'bg-green-900/20 border-green-700'
-              : 'bg-red-900/20 border-red-700'
-          }`}
-        >
-          <div className="flex items-center justify-between mb-2">
-            <h3
-              className={`font-medium ${
-                runResult.success ? 'text-green-400' : 'text-red-400'
-              }`}
-            >
-              {runResult.success ? 'Execution Complete' : 'Execution Failed'}
-            </h3>
-            <button
-              onClick={() => setRunResult(null)}
-              className="text-gray-500 hover:text-gray-300"
-            >
-              Dismiss
-            </button>
-          </div>
-          {runResult.error && (
-            <p className="text-red-400 text-sm">{runResult.error}</p>
-          )}
-          {runResult.toolCallCount !== undefined && (
-            <p className="text-gray-400 text-sm">
-              Tool calls made: {runResult.toolCallCount}
-            </p>
-          )}
-          {runResult.executionLog && runResult.executionLog.length > 0 && (
-            <div className="mt-2">
-              <p className="text-gray-400 text-sm mb-1">Actions taken:</p>
-              <ul className="text-sm space-y-1">
-                {runResult.executionLog.map((log, i) => (
-                  <li key={i} className="text-gray-300">
-                    <span className="text-blue-400">{log.action}</span>
-                    {(log.result as { error?: string })?.error && (
-                      <span className="text-red-400 ml-2">
-                        - {(log.result as { error: string }).error}
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Prompt Editor */}
-      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-xl font-semibold text-white">Bot Prompt</h2>
-            <p className="text-gray-400 text-sm mt-1">
-              Write instructions for your AI trading bot. The bot will use available
-              tools to analyze the market and make trades.
-            </p>
-          </div>
-          {botPrompt?.version ? (
-            <span className="text-gray-500 text-sm">v{botPrompt.version}</span>
-          ) : null}
-        </div>
-
-        <textarea
-          value={promptText}
-          onChange={(e) => handlePromptChange(e.target.value)}
-          placeholder="Enter your trading strategy prompt here...
-
-Example:
-Analyze the market and look for undervalued stocks. Check the order book for opportunities where I can buy low and sell high. Be conservative with trades and maintain at least 20% of my portfolio in cash.
-
-Focus on:
-1. Stocks with recent price drops that might recover
-2. Large bid/ask spreads indicating potential profit opportunities
-3. Avoid stocks where one user holds more than 50% (manipulation risk)"
-          className="w-full h-64 bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-green-500 resize-none font-mono text-sm"
-        />
-
-        <div className="flex items-center justify-between mt-4">
-          <div className="text-sm text-gray-500">
-            {hasChanges && <span className="text-yellow-500">Unsaved changes</span>}
-            {botPrompt?.lastModified && !hasChanges && (
-              <span>
-                Last saved: {new Date(botPrompt.lastModified).toLocaleString()}
-              </span>
-            )}
-          </div>
-          <button
-            onClick={() => saveMutation.mutate()}
-            disabled={!hasChanges || saveMutation.isPending}
-            className="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-6 py-2 rounded-md font-medium"
-          >
-            {saveMutation.isPending ? 'Saving...' : 'Save Prompt'}
-          </button>
-        </div>
-
-        {saveMutation.isError && (
-          <p className="text-red-400 text-sm mt-2">
-            Failed to save: {(saveMutation.error as Error).message}
-          </p>
-        )}
-      </div>
-
-      {/* Available Tools */}
-      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-        <h2 className="text-xl font-semibold text-white mb-4">Available Tools</h2>
-        <p className="text-gray-400 text-sm mb-4">
-          Your bot can use these tools to analyze the market and execute trades:
-        </p>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {tools?.map((tool) => (
-            <div
-              key={tool.name}
-              className="bg-gray-700/50 rounded px-3 py-2"
-            >
-              <code className="text-green-400 text-sm">{tool.name}</code>
-              <p className="text-gray-400 text-xs mt-1">{tool.description}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Activity Logs */}
-      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-        <h2 className="text-xl font-semibold text-white mb-4">Recent Activity</h2>
-        {logsLoading ? (
-          <p className="text-gray-400">Loading logs...</p>
-        ) : logs && logs.length > 0 ? (
-          <div className="space-y-3">
-            {logs.map((log) => {
-              // Display assistant messages (thought process) differently
-              if (log.actionType === 'assistant_message') {
-                const content = (log.result as { content?: string })?.content || '';
-                const isExpanded = expandedMessages.has(log.logId);
-                const lines = content.split('\n');
-                const shouldTruncate = lines.length > 4;
-                const displayContent = isExpanded || !shouldTruncate
-                  ? content
-                  : lines.slice(0, 4).join('\n');
-
-                return (
-                  <div
-                    key={log.logId}
-                    className="bg-gray-700/50 border border-gray-600 rounded-lg p-4 cursor-pointer hover:bg-gray-700/60 transition-colors"
-                    onClick={() => toggleMessageExpanded(log.logId)}
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex items-center space-x-2">
-                        <span className="text-purple-400 font-medium text-sm">AI Thought Process</span>
-                        {shouldTruncate && (
-                          <span className="text-gray-500 text-xs">
-                            {isExpanded ? '(Click to collapse)' : '(Click to expand)'}
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-gray-500 text-xs">
-                        {new Date(log.timestamp).toLocaleString()}
-                      </span>
-                    </div>
-                    <p className="text-gray-200 text-sm whitespace-pre-wrap">
-                      {displayContent}
-                      {!isExpanded && shouldTruncate && (
-                        <span className="text-gray-500">...</span>
-                      )}
-                    </p>
-                  </div>
-                );
-              }
-
-              // Display tool calls and other actions
-              return (
-                <div
-                  key={log.logId}
-                  className="bg-gray-700/30 border border-gray-700 rounded-lg p-3"
+            {botPrompt?.promptId && (
+              <div style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
+                <TBtn
+                  variant={botPrompt.isActive ? 'ghost' : 'primary'}
+                  onClick={() => toggleMutation.mutate(!botPrompt.isActive)}
+                  disabled={toggleMutation.isPending}
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-2 mb-1">
-                        <code className="text-blue-400 text-sm">{log.actionType}</code>
-                        <span className="text-gray-500 text-xs">
-                          {new Date(log.timestamp).toLocaleString()}
-                        </span>
-                      </div>
-                      {log.actionDetails && Object.keys(log.actionDetails).length > 0 && (
-                        <div className="text-gray-400 text-xs mb-1">
-                          {JSON.stringify(log.actionDetails)}
-                        </div>
-                      )}
-                      <div>
-                        {(log.result as { error?: string })?.error ? (
-                          <span className="text-red-400 text-sm">
-                            Error: {(log.result as { error: string }).error}
-                          </span>
-                        ) : (log.result as { success?: boolean })?.success !== undefined ? (
-                          <span
-                            className={`text-sm ${
-                              (log.result as { success: boolean }).success
-                                ? 'text-green-400'
-                                : 'text-red-400'
-                            }`}
-                          >
-                            {(log.result as { success: boolean }).success
-                              ? 'Success'
-                              : 'Failed'}
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+                  {botPrompt.isActive ? '◻ Halt agent' : '◼ Deploy agent'}
+                </TBtn>
+                <TBtn
+                  variant="ghost"
+                  onClick={() => runOnceMutation.mutate()}
+                  disabled={runOnceMutation.isPending || !botPrompt.promptId}
+                >
+                  {runOnceMutation.isPending ? 'Running...' : 'Run once'}
+                </TBtn>
+              </div>
+            )}
           </div>
-        ) : (
-          <p className="text-gray-500">No activity logs yet. Run your bot to see activity.</p>
-        )}
+
+          {/* Run result */}
+          {runResult && (
+            <div style={{
+              margin: '0 16px 0', padding: '10px 14px',
+              background: 'var(--bg-sunken)', border: '1px solid var(--border)',
+              fontFamily: 'var(--font-mono)', fontSize: 12,
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            }}>
+              <span style={{ color: runResult.success ? 'var(--fg)' : 'var(--state-loss)' }}>
+                {runResult.success ? '◼ Execution complete' : 'ERR / Execution failed'}
+                {runResult.toolCallCount !== undefined && ` · ${runResult.toolCallCount} tool calls`}
+                {runResult.error && ` · ${runResult.error}`}
+              </span>
+              <button onClick={() => setRunResult(null)} style={{ background: 0, border: 0, color: 'var(--fg-subtle)', cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: 11 }}>Dismiss</button>
+            </div>
+          )}
+
+          {/* Execution queue */}
+          {botStatus && (botStatus.currentBot || botStatus.queue.length > 0) && (
+            <div style={{ padding: 16, borderBottom: '1px solid var(--border)' }}>
+              <div className="t-label" style={{ marginBottom: 12 }}>Execution queue</div>
+              {botStatus.currentBot && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '8px 12px', border: '1px solid var(--border-strong)',
+                  fontFamily: 'var(--font-mono)', fontSize: 12, marginBottom: 4,
+                }}>
+                  <span style={{ width: 6, height: 6, background: 'var(--fg)', animation: 'sr-pulse 1.6s ease-in-out infinite' }} />
+                  <span className="t-label">Executing</span>
+                  <span style={{ color: 'var(--fg)' }}>{botStatus.currentBot.username}</span>
+                </div>
+              )}
+              {botStatus.queue.map((bot, i) => (
+                <div key={bot.userId} style={{
+                  display: 'flex', gap: 8, padding: '6px 12px',
+                  borderBottom: '1px solid var(--border)',
+                  fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--fg-muted)',
+                }}>
+                  <span style={{ color: 'var(--fg-subtle)' }}>{String(i + 1).padStart(2, '0')}</span>
+                  <span>{bot.username}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Available tools */}
+          {tools && tools.length > 0 && (
+            <div style={{ padding: 16, borderBottom: '1px solid var(--border)' }}>
+              <div className="t-label" style={{ marginBottom: 12 }}>Available tools / {tools.length}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
+                {tools.map(tool => (
+                  <div key={tool.name} style={{
+                    padding: '8px 12px', border: '1px solid var(--border)',
+                    background: 'var(--bg-sunken)',
+                  }}>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--fg)' }}>{tool.name}</div>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-muted)', marginTop: 2 }}>{tool.description}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Activity log sidebar */}
+        <div style={{
+          width: 400, flexShrink: 0, borderLeft: '1px solid var(--border)',
+          display: 'flex', flexDirection: 'column',
+        }}>
+          <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)' }}>
+            <span className="t-label">Activity log</span>
+          </div>
+          <div style={{ flex: 1, overflow: 'auto' }}>
+            {logsLoading ? (
+              <div style={{ padding: 16, fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--fg-muted)' }}>Loading...</div>
+            ) : logs.length === 0 ? (
+              <div style={{ padding: 16, fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--fg-subtle)' }}>∅ No activity yet. Run your agent.</div>
+            ) : (
+              logs.map(log => (
+                <LogEntry
+                  key={log.logId}
+                  log={log}
+                  expanded={expandedLogs.has(log.logId)}
+                  onToggle={() => setExpandedLogs(prev => {
+                    const next = new Set(prev);
+                    if (next.has(log.logId)) next.delete(log.logId); else next.add(log.logId);
+                    return next;
+                  })}
+                />
+              ))
+            )}
+          </div>
+        </div>
       </div>
+
+      {/* Mandate composer modal */}
+      <MandateComposer
+        open={composerOpen}
+        promptText={promptText}
+        onTextChange={handleTextChange}
+        isActive={botPrompt?.isActive ?? false}
+        onClose={() => setComposerOpen(false)}
+        onSave={() => saveMutation.mutate()}
+        onToggle={(v) => toggleMutation.mutate(v)}
+        onRunOnce={() => runOnceMutation.mutate()}
+        saving={saveMutation.isPending}
+        running={runOnceMutation.isPending}
+        version={botPrompt?.version}
+        lastModified={botPrompt?.lastModified}
+        hasChanges={hasChanges}
+      />
     </div>
   );
 }
