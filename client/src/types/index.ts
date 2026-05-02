@@ -1,7 +1,6 @@
 export interface User {
   id: number;
   username: string;
-  email: string;
   cashBalance: number;
   reservedCash: number;
   availableCash: number;

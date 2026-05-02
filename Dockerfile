@@ -22,8 +22,8 @@ RUN npm run build
 # Production stage
 FROM node:20-alpine
 
-# Install OpenSSL for Prisma
-RUN apk add --no-cache openssl
+# Install OpenSSL for Prisma and curl for healthcheck
+RUN apk add --no-cache openssl curl
 
 WORKDIR /app
 

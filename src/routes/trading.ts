@@ -6,34 +6,67 @@ import { validateMinimumPrice } from '../lib/utils';
 
 const router = Router();
 
+const MANUAL_TRADE_COOLDOWN_MS = 30 * 60 * 1000;
+
+function checkManualCooldown(lastManualTradeAt: Date | null): { blocked: true; remainingMs: number } | { blocked: false } {
+  if (!lastManualTradeAt) return { blocked: false };
+  const elapsed = Date.now() - lastManualTradeAt.getTime();
+  if (elapsed < MANUAL_TRADE_COOLDOWN_MS) {
+    return { blocked: true, remainingMs: MANUAL_TRADE_COOLDOWN_MS - elapsed };
+  }
+  return { blocked: false };
+}
+
+function parseShares(raw: unknown): { ok: true; value: bigint } | { ok: false; error: string } {
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n <= 0) {
+    return { ok: false, error: 'shares must be a positive integer' };
+  }
+  return { ok: true, value: BigInt(n) };
+}
+
+function parsePrice(raw: unknown): { ok: true; value: number } | { ok: false; error: string } {
+  const n = parseFloat(String(raw));
+  if (isNaN(n) || n <= 0) {
+    return { ok: false, error: 'pricePerShare must be a positive number' };
+  }
+  return { ok: true, value: n };
+}
+
+function parseId(raw: string): number | null {
+  const n = parseInt(raw, 10);
+  return isNaN(n) ? null : n;
+}
+
 // Apply authentication to all trading routes
 router.use(authenticate);
 
 // Place a bid (buy order)
 router.post('/bids', async (req: Request, res: Response) => {
   try {
-    const userId = req.user!.userId; // Use authenticated user ID
+    const userId = req.user!.userId;
     const { ticker, shares, pricePerShare } = req.body;
 
-    if (!ticker || !shares || !pricePerShare) {
+    if (!ticker || shares === undefined || pricePerShare === undefined) {
       return res.status(400).json({
         error: 'ticker, shares, and pricePerShare are required',
       });
     }
 
-    const shareCount = BigInt(shares);
-    const price = parseFloat(pricePerShare);
-    const totalCost = Number(shareCount) * price;
+    const sharesResult = parseShares(shares);
+    if (!sharesResult.ok) return res.status(400).json({ error: sharesResult.error });
 
-    if (shareCount <= 0 || price <= 0) {
-      return res.status(400).json({ error: 'Shares and price must be positive' });
-    }
+    const priceResult = parsePrice(pricePerShare);
+    if (!priceResult.ok) return res.status(400).json({ error: priceResult.error });
+
+    const shareCount = sharesResult.value;
+    const price = priceResult.value;
+    const totalCost = Number(shareCount) * price;
 
     if (!validateMinimumPrice(price)) {
       return res.status(400).json({ error: 'Price per share must be at least $0.01' });
     }
 
-    // Get user and company
     const [user, company] = await Promise.all([
       prisma.user.findUnique({
         where: { id: userId },
@@ -52,7 +85,6 @@ router.post('/bids', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Company not found' });
     }
 
-    // Check if user already has 5 open bids
     const openBidsCount = await prisma.bid.count({
       where: { userId, status: 'open' },
     });
@@ -63,19 +95,13 @@ router.post('/bids', async (req: Request, res: Response) => {
       });
     }
 
-    // Check 30-minute cooldown on manual trades
-    if (user.account.lastManualTradeAt) {
-      const timeSinceLastTrade = Date.now() - user.account.lastManualTradeAt.getTime();
-      const cooldownMs = 30 * 60 * 1000; // 30 minutes in milliseconds
-
-      if (timeSinceLastTrade < cooldownMs) {
-        const remainingMs = cooldownMs - timeSinceLastTrade;
-        const remainingMinutes = Math.ceil(remainingMs / 60000);
-        return res.status(429).json({
-          error: `Manual trade cooldown active. Please wait ${remainingMinutes} more minute(s) before placing another order.`,
-          cooldownRemainingMs: remainingMs,
-        });
-      }
+    const cooldown = checkManualCooldown(user.account.lastManualTradeAt);
+    if (cooldown.blocked) {
+      const remainingMinutes = Math.ceil(cooldown.remainingMs / 60000);
+      return res.status(429).json({
+        error: `Manual trade cooldown active. Please wait ${remainingMinutes} more minute(s) before placing another order.`,
+        cooldownRemainingMs: cooldown.remainingMs,
+      });
     }
 
     const availableCash = Number(user.account.cashBalance) - Number(user.account.reservedCash);
@@ -85,9 +111,7 @@ router.post('/bids', async (req: Request, res: Response) => {
       });
     }
 
-    // Create bid and reserve cash
     const bid = await prisma.$transaction(async (tx) => {
-      // Reserve cash and update last manual trade timestamp
       await tx.account.update({
         where: { userId },
         data: {
@@ -96,7 +120,6 @@ router.post('/bids', async (req: Request, res: Response) => {
         },
       });
 
-      // Create bid
       return tx.bid.create({
         data: {
           userId,
@@ -124,27 +147,28 @@ router.post('/bids', async (req: Request, res: Response) => {
 // Place an ask (sell order)
 router.post('/asks', async (req: Request, res: Response) => {
   try {
-    const userId = req.user!.userId; // Use authenticated user ID
+    const userId = req.user!.userId;
     const { ticker, shares, pricePerShare } = req.body;
 
-    if (!ticker || !shares || !pricePerShare) {
+    if (!ticker || shares === undefined || pricePerShare === undefined) {
       return res.status(400).json({
         error: 'ticker, shares, and pricePerShare are required',
       });
     }
 
-    const shareCount = BigInt(shares);
-    const price = parseFloat(pricePerShare);
+    const sharesResult = parseShares(shares);
+    if (!sharesResult.ok) return res.status(400).json({ error: sharesResult.error });
 
-    if (shareCount <= 0 || price <= 0) {
-      return res.status(400).json({ error: 'Shares and price must be positive' });
-    }
+    const priceResult = parsePrice(pricePerShare);
+    if (!priceResult.ok) return res.status(400).json({ error: priceResult.error });
+
+    const shareCount = sharesResult.value;
+    const price = priceResult.value;
 
     if (!validateMinimumPrice(price)) {
       return res.status(400).json({ error: 'Price per share must be at least $0.01' });
     }
 
-    // Get company and user account
     const [company, user] = await Promise.all([
       prisma.company.findUnique({
         where: { tickerSymbol: ticker.toUpperCase() },
@@ -163,7 +187,6 @@ router.post('/asks', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Company not found' });
     }
 
-    // Check if user already has 5 open asks
     const openAsksCount = await prisma.ask.count({
       where: { userId, status: 'open' },
     });
@@ -174,22 +197,15 @@ router.post('/asks', async (req: Request, res: Response) => {
       });
     }
 
-    // Check 30-minute cooldown on manual trades
-    if (user.account.lastManualTradeAt) {
-      const timeSinceLastTrade = Date.now() - user.account.lastManualTradeAt.getTime();
-      const cooldownMs = 30 * 60 * 1000; // 30 minutes in milliseconds
-
-      if (timeSinceLastTrade < cooldownMs) {
-        const remainingMs = cooldownMs - timeSinceLastTrade;
-        const remainingMinutes = Math.ceil(remainingMs / 60000);
-        return res.status(429).json({
-          error: `Manual trade cooldown active. Please wait ${remainingMinutes} more minute(s) before placing another order.`,
-          cooldownRemainingMs: remainingMs,
-        });
-      }
+    const cooldown = checkManualCooldown(user.account.lastManualTradeAt);
+    if (cooldown.blocked) {
+      const remainingMinutes = Math.ceil(cooldown.remainingMs / 60000);
+      return res.status(429).json({
+        error: `Manual trade cooldown active. Please wait ${remainingMinutes} more minute(s) before placing another order.`,
+        cooldownRemainingMs: cooldown.remainingMs,
+      });
     }
 
-    // Get user's holding
     const holding = await prisma.stockHolding.findUnique({
       where: {
         userId_companyId: {
@@ -210,9 +226,7 @@ router.post('/asks', async (req: Request, res: Response) => {
       });
     }
 
-    // Create ask and reserve shares
     const ask = await prisma.$transaction(async (tx) => {
-      // Reserve shares
       await tx.stockHolding.update({
         where: {
           userId_companyId: {
@@ -225,7 +239,6 @@ router.post('/asks', async (req: Request, res: Response) => {
         },
       });
 
-      // Update last manual trade timestamp
       await tx.account.update({
         where: { userId },
         data: {
@@ -233,7 +246,6 @@ router.post('/asks', async (req: Request, res: Response) => {
         },
       });
 
-      // Create ask
       return tx.ask.create({
         data: {
           userId,
@@ -260,8 +272,9 @@ router.post('/asks', async (req: Request, res: Response) => {
 // Fulfill a bid (sell to the bidder)
 router.post('/bids/:bidId/fulfill', async (req: Request<{ bidId: string }>, res: Response) => {
   try {
-    const bidId = parseInt(req.params.bidId);
-    const sellerId = req.user!.userId; // Use authenticated user as seller
+    const bidId = parseId(req.params.bidId);
+    if (bidId === null) return res.status(400).json({ error: 'Invalid bid ID' });
+    const sellerId = req.user!.userId;
 
     const bid = await prisma.bid.findUnique({
       where: { id: bidId },
@@ -280,7 +293,6 @@ router.post('/bids/:bidId/fulfill', async (req: Request<{ bidId: string }>, res:
       return res.status(400).json({ error: 'Cannot fulfill your own bid' });
     }
 
-    // Check fulfiller has enough shares
     const holding = await prisma.stockHolding.findUnique({
       where: {
         userId_companyId: {
@@ -300,9 +312,7 @@ router.post('/bids/:bidId/fulfill', async (req: Request<{ bidId: string }>, res:
       });
     }
 
-    // Execute transaction
     const transaction = await prisma.$transaction(async (tx) => {
-      // Deduct shares from seller
       const updatedSellerHolding = await tx.stockHolding.update({
         where: {
           userId_companyId: {
@@ -315,7 +325,6 @@ router.post('/bids/:bidId/fulfill', async (req: Request<{ bidId: string }>, res:
         },
       });
 
-      // Delete holding if shares reached 0
       if (Number(updatedSellerHolding.sharesOwned) === 0) {
         await tx.stockHolding.delete({
           where: {
@@ -327,7 +336,6 @@ router.post('/bids/:bidId/fulfill', async (req: Request<{ bidId: string }>, res:
         });
       }
 
-      // Add shares to buyer (create or update holding)
       await tx.stockHolding.upsert({
         where: {
           userId_companyId: {
@@ -346,7 +354,6 @@ router.post('/bids/:bidId/fulfill', async (req: Request<{ bidId: string }>, res:
         },
       });
 
-      // Deduct reserved cash and cash balance from buyer
       await tx.account.update({
         where: { userId: bid.userId },
         data: {
@@ -355,7 +362,6 @@ router.post('/bids/:bidId/fulfill', async (req: Request<{ bidId: string }>, res:
         },
       });
 
-      // Add cash to seller
       await tx.account.update({
         where: { userId: sellerId },
         data: {
@@ -363,19 +369,16 @@ router.post('/bids/:bidId/fulfill', async (req: Request<{ bidId: string }>, res:
         },
       });
 
-      // Mark bid as fulfilled
       await tx.bid.update({
         where: { id: bidId },
         data: { status: 'fulfilled' },
       });
 
-      // Get company's current split multiplier
       const company = await tx.company.findUnique({
         where: { id: bid.companyId },
         select: { splitMultiplier: true },
       });
 
-      // Create transaction record
       return tx.transaction.create({
         data: {
           buyerId: bid.userId,
@@ -401,7 +404,6 @@ router.post('/bids/:bidId/fulfill', async (req: Request<{ bidId: string }>, res:
       pricePerShare: Number(transaction.pricePerShare),
       cashReceived: Number(transaction.totalAmount),
       buyer: transaction.buyer.username,
-      newStockPrice: Number(transaction.pricePerShare),
     });
   } catch (error) {
     logger.error('Error in trading route', error);
@@ -412,8 +414,9 @@ router.post('/bids/:bidId/fulfill', async (req: Request<{ bidId: string }>, res:
 // Fulfill an ask (buy from the asker)
 router.post('/asks/:askId/fulfill', async (req: Request<{ askId: string }>, res: Response) => {
   try {
-    const askId = parseInt(req.params.askId);
-    const buyerId = req.user!.userId; // Use authenticated user as buyer
+    const askId = parseId(req.params.askId);
+    if (askId === null) return res.status(400).json({ error: 'Invalid ask ID' });
+    const buyerId = req.user!.userId;
 
     const ask = await prisma.ask.findUnique({
       where: { id: askId },
@@ -434,7 +437,6 @@ router.post('/asks/:askId/fulfill', async (req: Request<{ askId: string }>, res:
 
     const totalCost = Number(ask.sharesOffered) * Number(ask.pricePerShare);
 
-    // Check fulfiller has enough cash
     const account = await prisma.account.findUnique({
       where: { userId: buyerId },
     });
@@ -450,9 +452,7 @@ router.post('/asks/:askId/fulfill', async (req: Request<{ askId: string }>, res:
       });
     }
 
-    // Execute transaction
     const transaction = await prisma.$transaction(async (tx) => {
-      // Deduct shares from seller (both owned and reserved)
       const updatedSellerHolding = await tx.stockHolding.update({
         where: {
           userId_companyId: {
@@ -466,7 +466,6 @@ router.post('/asks/:askId/fulfill', async (req: Request<{ askId: string }>, res:
         },
       });
 
-      // Delete holding if shares reached 0
       if (Number(updatedSellerHolding.sharesOwned) === 0) {
         await tx.stockHolding.delete({
           where: {
@@ -478,7 +477,6 @@ router.post('/asks/:askId/fulfill', async (req: Request<{ askId: string }>, res:
         });
       }
 
-      // Add shares to buyer (create or update holding)
       await tx.stockHolding.upsert({
         where: {
           userId_companyId: {
@@ -497,7 +495,6 @@ router.post('/asks/:askId/fulfill', async (req: Request<{ askId: string }>, res:
         },
       });
 
-      // Deduct cash from buyer
       await tx.account.update({
         where: { userId: buyerId },
         data: {
@@ -505,7 +502,6 @@ router.post('/asks/:askId/fulfill', async (req: Request<{ askId: string }>, res:
         },
       });
 
-      // Add cash to seller
       await tx.account.update({
         where: { userId: ask.userId },
         data: {
@@ -513,19 +509,16 @@ router.post('/asks/:askId/fulfill', async (req: Request<{ askId: string }>, res:
         },
       });
 
-      // Mark ask as fulfilled
       await tx.ask.update({
         where: { id: askId },
         data: { status: 'fulfilled' },
       });
 
-      // Get company's current split multiplier
       const company = await tx.company.findUnique({
         where: { id: ask.companyId },
         select: { splitMultiplier: true },
       });
 
-      // Create transaction record
       return tx.transaction.create({
         data: {
           buyerId: buyerId,
@@ -551,7 +544,6 @@ router.post('/asks/:askId/fulfill', async (req: Request<{ askId: string }>, res:
       pricePerShare: Number(transaction.pricePerShare),
       cashSpent: Number(transaction.totalAmount),
       seller: transaction.seller.username,
-      newStockPrice: Number(transaction.pricePerShare),
     });
   } catch (error) {
     logger.error('Error in trading route', error);
@@ -562,8 +554,9 @@ router.post('/asks/:askId/fulfill', async (req: Request<{ askId: string }>, res:
 // Cancel a bid
 router.post('/bids/:bidId/cancel', async (req: Request<{ bidId: string }>, res: Response) => {
   try {
-    const bidId = parseInt(req.params.bidId);
-    const userId = req.user!.userId; // Use authenticated user
+    const bidId = parseId(req.params.bidId);
+    if (bidId === null) return res.status(400).json({ error: 'Invalid bid ID' });
+    const userId = req.user!.userId;
 
     const bid = await prisma.bid.findUnique({
       where: { id: bidId },
@@ -582,7 +575,6 @@ router.post('/bids/:bidId/cancel', async (req: Request<{ bidId: string }>, res: 
     }
 
     await prisma.$transaction(async (tx) => {
-      // Unreserve cash
       await tx.account.update({
         where: { userId },
         data: {
@@ -590,7 +582,6 @@ router.post('/bids/:bidId/cancel', async (req: Request<{ bidId: string }>, res: 
         },
       });
 
-      // Mark bid as cancelled
       await tx.bid.update({
         where: { id: bidId },
         data: { status: 'cancelled' },
@@ -617,8 +608,9 @@ router.post('/bids/:bidId/cancel', async (req: Request<{ bidId: string }>, res: 
 // Cancel an ask
 router.post('/asks/:askId/cancel', async (req: Request<{ askId: string }>, res: Response) => {
   try {
-    const askId = parseInt(req.params.askId);
-    const userId = req.user!.userId; // Use authenticated user
+    const askId = parseId(req.params.askId);
+    if (askId === null) return res.status(400).json({ error: 'Invalid ask ID' });
+    const userId = req.user!.userId;
 
     const ask = await prisma.ask.findUnique({
       where: { id: askId },
@@ -637,7 +629,6 @@ router.post('/asks/:askId/cancel', async (req: Request<{ askId: string }>, res: 
     }
 
     await prisma.$transaction(async (tx) => {
-      // Unreserve shares
       await tx.stockHolding.update({
         where: {
           userId_companyId: {
@@ -650,7 +641,6 @@ router.post('/asks/:askId/cancel', async (req: Request<{ askId: string }>, res: 
         },
       });
 
-      // Mark ask as cancelled
       await tx.ask.update({
         where: { id: askId },
         data: { status: 'cancelled' },
@@ -737,7 +727,7 @@ router.get('/transactions', async (req: Request, res: Response) => {
   try {
     const ticker = req.query.ticker as string | undefined;
     const username = req.query.username as string | undefined;
-    const limit = parseInt(req.query.limit as string) || 50;
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
 
     const whereClause: Record<string, unknown> = {};
 

@@ -38,15 +38,17 @@ services:
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
       BOT_EXECUTION_INTERVAL: ${BOT_EXECUTION_INTERVAL:-30000}
+      CORS_ORIGIN: ${CORS_ORIGIN:-}
     depends_on:
       db:
         condition: service_healthy
-    command: >
-      sh -c "
-        npx prisma db push --skip-generate &&
-        npx prisma generate &&
-        node dist/server.js
-      "
+    command: sh -c "npx prisma db push && node dist/server.js"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:${PORT:-3000}/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     networks:
       - app-network
     extra_hosts:
@@ -66,7 +68,8 @@ services:
     environment:
       PORT: ${CLIENT_PORT:-80}
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     networks:
       - app-network
 

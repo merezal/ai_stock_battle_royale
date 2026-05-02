@@ -1,3 +1,4 @@
+import type { StockHolding } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
 import { validateMinimumPrice } from '../lib/utils';
@@ -635,7 +636,7 @@ export async function executePlaceAsk(userId: number, asks: Array<{ ticker: stri
   }
 
   // Validate companies and holdings
-  const askData: Array<{ ticker: string; shares: number; pricePerShare: number; companyId: number; holding: any }> = [];
+  const askData: Array<{ ticker: string; shares: number; pricePerShare: number; companyId: number; holding: StockHolding }> = [];
 
   for (const ask of asks) {
     // Validate positive shares and price

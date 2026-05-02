@@ -1,7 +1,6 @@
 import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
-import cookieParser from 'cookie-parser';
 import { logger } from './lib/logger';
 
 import usersRouter from './routes/users';
@@ -12,11 +11,11 @@ import botRouter from './routes/bot';
 
 const app = express();
 
-app.use(cors());
-app.use(morgan('dev'));
+const corsOrigin = process.env.CORS_ORIGIN;
+app.use(cors(corsOrigin ? { origin: corsOrigin } : {}));
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
-app.use(cookieParser());
 
 // API routes
 app.use('/api/users', usersRouter);

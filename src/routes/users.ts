@@ -2,12 +2,54 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { Prisma } from '@prisma/client';
 import { hashPassword, verifyPassword, generateToken, validatePassword } from '../lib/auth';
-import { authenticate, authorizeUser } from '../middleware/auth';
+import { authenticate } from '../middleware/auth';
 import { validateUsername } from '../lib/utils';
 import { getVWAPPrice } from '../lib/pricing';
 import { logger } from '../lib/logger';
 
 const router = Router();
+
+type StockHoldingWithCompany = {
+  sharesOwned: bigint;
+  reservedShares: bigint;
+  company: {
+    id: number;
+    tickerSymbol: string;
+    companyName: string;
+    foundingCost: Prisma.Decimal | null;
+    totalSharesIssued: bigint;
+    splitMultiplier: Prisma.Decimal;
+  };
+};
+
+async function calcHoldings(rawHoldings: StockHoldingWithCompany[]) {
+  const withShares = rawHoldings.filter(h => Number(h.sharesOwned) > 0);
+
+  const holdings = await Promise.all(
+    withShares.map(async (h) => {
+      const currentPrice = await getVWAPPrice({
+        companyId: h.company.id,
+        foundingCost: h.company.foundingCost ? Number(h.company.foundingCost) : null,
+        totalSharesIssued: h.company.totalSharesIssued,
+        splitMultiplier: Number(h.company.splitMultiplier),
+      });
+      const positionValue = Number(h.sharesOwned) * currentPrice;
+
+      return {
+        ticker: h.company.tickerSymbol,
+        companyName: h.company.companyName,
+        sharesOwned: Number(h.sharesOwned),
+        reservedShares: Number(h.reservedShares),
+        availableShares: Number(h.sharesOwned) - Number(h.reservedShares),
+        currentPrice,
+        positionValue,
+      };
+    })
+  );
+
+  const stockValue = holdings.reduce((sum, h) => sum + h.positionValue, 0);
+  return { holdings, stockValue };
+}
 
 // Register a new user
 router.post('/register', async (req: Request, res: Response) => {
@@ -18,20 +60,17 @@ router.post('/register', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Username and password are required' });
     }
 
-    // Validate and sanitize username
     const usernameValidation = validateUsername(username);
     if (!usernameValidation.valid) {
       return res.status(400).json({ error: usernameValidation.error });
     }
     const sanitizedUsername = username.trim();
 
-    // Validate password
     const passwordValidation = validatePassword(password);
     if (!passwordValidation.valid) {
       return res.status(400).json({ error: passwordValidation.error });
     }
 
-    // Hash password
     const passwordHash = await hashPassword(password);
 
     const user = await prisma.user.create({
@@ -51,7 +90,6 @@ router.post('/register', async (req: Request, res: Response) => {
       },
     });
 
-    // Generate JWT token
     const token = generateToken({
       userId: user.id,
       username: user.username,
@@ -84,7 +122,6 @@ router.post('/login', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Username and password are required' });
     }
 
-    // Find user
     const user = await prisma.user.findUnique({
       where: { username: username.trim() },
       include: { account: true },
@@ -94,13 +131,11 @@ router.post('/login', async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Invalid username or password' });
     }
 
-    // Verify password
     const isValid = await verifyPassword(password, user.passwordHash);
     if (!isValid) {
       return res.status(401).json({ error: 'Invalid username or password' });
     }
 
-    // Generate JWT token
     const token = generateToken({
       userId: user.id,
       username: user.username,
@@ -127,11 +162,7 @@ router.get('/by-username/:username/portfolio', async (req: Request<{ username: s
       where: { username },
       include: {
         account: true,
-        stockHoldings: {
-          include: {
-            company: true,
-          },
-        },
+        stockHoldings: { include: { company: true } },
       },
     });
 
@@ -139,33 +170,7 @@ router.get('/by-username/:username/portfolio', async (req: Request<{ username: s
       return res.status(404).json({ error: 'User not found' });
     }
 
-    let stockValue = 0;
-    const holdingsWithShares = user.stockHoldings.filter(h => Number(h.sharesOwned) > 0);
-
-    // Calculate VWAP for each holding in parallel
-    const holdings = await Promise.all(
-      holdingsWithShares.map(async (h) => {
-        const currentPrice = await getVWAPPrice({
-          companyId: h.company.id,
-          foundingCost: h.company.foundingCost ? Number(h.company.foundingCost) : null,
-          totalSharesIssued: h.company.totalSharesIssued,
-          splitMultiplier: Number(h.company.splitMultiplier),
-        });
-        const positionValue = Number(h.sharesOwned) * currentPrice;
-        stockValue += positionValue;
-
-        return {
-          ticker: h.company.tickerSymbol,
-          companyName: h.company.companyName,
-          sharesOwned: Number(h.sharesOwned),
-          reservedShares: Number(h.reservedShares),
-          availableShares: Number(h.sharesOwned) - Number(h.reservedShares),
-          currentPrice,
-          positionValue,
-        };
-      })
-    );
-
+    const { holdings, stockValue } = await calcHoldings(user.stockHoldings);
     const cashBalance = Number(user.account.cashBalance);
     const reservedCash = Number(user.account.reservedCash);
 
@@ -189,17 +194,14 @@ router.get('/by-username/:username/portfolio', async (req: Request<{ username: s
 // Get user by ID
 router.get('/:id', async (req: Request<{ id: string }>, res: Response) => {
   try {
-    const userId = parseInt(req.params.id);
+    const userId = parseInt(req.params.id, 10);
+    if (isNaN(userId)) return res.status(400).json({ error: 'Invalid user ID' });
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
       include: {
         account: true,
-        stockHoldings: {
-          include: {
-            company: true,
-          },
-        },
+        stockHoldings: { include: { company: true } },
       },
     });
 
@@ -236,17 +238,14 @@ router.get('/:id', async (req: Request<{ id: string }>, res: Response) => {
 // Get user portfolio with calculated values
 router.get('/:id/portfolio', async (req: Request<{ id: string }>, res: Response) => {
   try {
-    const userId = parseInt(req.params.id);
+    const userId = parseInt(req.params.id, 10);
+    if (isNaN(userId)) return res.status(400).json({ error: 'Invalid user ID' });
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
       include: {
         account: true,
-        stockHoldings: {
-          include: {
-            company: true,
-          },
-        },
+        stockHoldings: { include: { company: true } },
       },
     });
 
@@ -254,33 +253,7 @@ router.get('/:id/portfolio', async (req: Request<{ id: string }>, res: Response)
       return res.status(404).json({ error: 'User not found' });
     }
 
-    let stockValue = 0;
-    const holdingsWithShares = user.stockHoldings.filter(h => Number(h.sharesOwned) > 0);
-
-    // Calculate VWAP for each holding in parallel
-    const holdings = await Promise.all(
-      holdingsWithShares.map(async (h) => {
-        const currentPrice = await getVWAPPrice({
-          companyId: h.company.id,
-          foundingCost: h.company.foundingCost ? Number(h.company.foundingCost) : null,
-          totalSharesIssued: h.company.totalSharesIssued,
-          splitMultiplier: Number(h.company.splitMultiplier),
-        });
-        const positionValue = Number(h.sharesOwned) * currentPrice;
-        stockValue += positionValue;
-
-        return {
-          ticker: h.company.tickerSymbol,
-          companyName: h.company.companyName,
-          sharesOwned: Number(h.sharesOwned),
-          reservedShares: Number(h.reservedShares),
-          availableShares: Number(h.sharesOwned) - Number(h.reservedShares),
-          currentPrice,
-          positionValue,
-        };
-      })
-    );
-
+    const { holdings, stockValue } = await calcHoldings(user.stockHoldings);
     const cashBalance = Number(user.account.cashBalance);
     const reservedCash = Number(user.account.reservedCash);
 
@@ -306,30 +279,24 @@ router.get('/', async (_req: Request, res: Response) => {
       where: { isActive: true },
       include: {
         account: true,
-        stockHoldings: {
-          include: {
-            company: true,
-          },
-        },
+        stockHoldings: { include: { company: true } },
       },
     });
 
-    // Calculate stock values for all users in parallel
     const leaderboard = await Promise.all(
       users.map(async (user) => {
-        const holdingsWithShares = user.stockHoldings.filter(h => Number(h.sharesOwned) > 0);
-
-        // Calculate VWAP for each holding
         const holdingValues = await Promise.all(
-          holdingsWithShares.map(async (h) => {
-            const currentPrice = await getVWAPPrice({
-              companyId: h.company.id,
-              foundingCost: h.company.foundingCost ? Number(h.company.foundingCost) : null,
-              totalSharesIssued: h.company.totalSharesIssued,
-              splitMultiplier: Number(h.company.splitMultiplier),
-            });
-            return Number(h.sharesOwned) * currentPrice;
-          })
+          user.stockHoldings
+            .filter(h => Number(h.sharesOwned) > 0)
+            .map(async (h) => {
+              const currentPrice = await getVWAPPrice({
+                companyId: h.company.id,
+                foundingCost: h.company.foundingCost ? Number(h.company.foundingCost) : null,
+                totalSharesIssued: h.company.totalSharesIssued,
+                splitMultiplier: Number(h.company.splitMultiplier),
+              });
+              return Number(h.sharesOwned) * currentPrice;
+            })
         );
 
         const stockValue = holdingValues.reduce((sum, val) => sum + val, 0);
@@ -361,16 +328,13 @@ router.get('/by-username/:username/portfolio-history', async (req: Request<{ use
 
     const user = await prisma.user.findUnique({
       where: { username },
-      include: {
-        account: true,
-      },
+      include: { account: true },
     });
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Get all transactions involving this user
     const transactions = await prisma.transaction.findMany({
       where: {
         OR: [
@@ -378,18 +342,14 @@ router.get('/by-username/:username/portfolio-history', async (req: Request<{ use
           { sellerId: user.id },
         ],
       },
-      include: {
-        company: true,
-      },
+      include: { company: true },
       orderBy: { timestamp: 'asc' },
+      take: 1000,
     });
 
-    // Starting cash is 100000, simulate portfolio value over time
     const startingCash = 100000;
     let cash = startingCash;
     const holdings: Record<number, { shares: number; companyId: number }> = {};
-
-    // Track the price of each stock at each transaction
     const stockPrices: Record<number, number> = {};
 
     const history: { timestamp: string; value: number }[] = [
@@ -401,26 +361,21 @@ router.get('/by-username/:username/portfolio-history', async (req: Request<{ use
       const shares = Number(tx.sharesTraded);
       const companyId = tx.companyId;
 
-      // Update stock price
       stockPrices[companyId] = Number(tx.pricePerShare);
 
       if (tx.buyerId === user.id) {
-        // User bought shares
         cash -= amount;
         holdings[companyId] = holdings[companyId] || { shares: 0, companyId };
         holdings[companyId].shares += shares;
       } else {
-        // User sold shares
         cash += amount;
         holdings[companyId] = holdings[companyId] || { shares: 0, companyId };
         holdings[companyId].shares -= shares;
       }
 
-      // Calculate total portfolio value at this point
       let stockValue = 0;
       for (const h of Object.values(holdings)) {
-        const price = stockPrices[h.companyId] || 0;
-        stockValue += h.shares * price;
+        stockValue += h.shares * (stockPrices[h.companyId] || 0);
       }
 
       history.push({
@@ -429,40 +384,19 @@ router.get('/by-username/:username/portfolio-history', async (req: Request<{ use
       });
     }
 
-    // Add current value as final point
     const currentUser = await prisma.user.findUnique({
       where: { id: user.id },
       include: {
         account: true,
-        stockHoldings: {
-          include: {
-            company: true,
-          },
-        },
+        stockHoldings: { include: { company: true } },
       },
     });
 
-    if (currentUser && currentUser.account) {
-      const holdingsWithShares = currentUser.stockHoldings.filter(h => Number(h.sharesOwned) > 0);
-
-      // Calculate VWAP for each holding
-      const holdingValues = await Promise.all(
-        holdingsWithShares.map(async (h) => {
-          const price = await getVWAPPrice({
-            companyId: h.company.id,
-            foundingCost: h.company.foundingCost ? Number(h.company.foundingCost) : null,
-            totalSharesIssued: h.company.totalSharesIssued,
-            splitMultiplier: Number(h.company.splitMultiplier),
-          });
-          return Number(h.sharesOwned) * price;
-        })
-      );
-
-      const currentStockValue = holdingValues.reduce((sum, val) => sum + val, 0);
-
+    if (currentUser?.account) {
+      const { stockValue } = await calcHoldings(currentUser.stockHoldings);
       history.push({
         timestamp: new Date().toISOString(),
-        value: Number(currentUser.account.cashBalance) + currentStockValue,
+        value: Number(currentUser.account.cashBalance) + stockValue,
       });
     }
 

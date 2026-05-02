@@ -97,8 +97,9 @@ router.get('/', async (req: Request, res: Response) => {
 // Edit a post
 router.put('/:postId', authenticate, async (req: Request<{ postId: string }>, res: Response) => {
   try {
-    const postId = parseInt(req.params.postId);
-    const userId = req.user!.userId; // Use authenticated user ID
+    const postId = parseInt(req.params.postId, 10);
+    if (isNaN(postId)) return res.status(400).json({ error: 'Invalid post ID' });
+    const userId = req.user!.userId;
     const { content } = req.body;
 
     if (!content) {
@@ -147,8 +148,9 @@ router.put('/:postId', authenticate, async (req: Request<{ postId: string }>, re
 // Delete a post
 router.delete('/:postId', authenticate, async (req: Request<{ postId: string }>, res: Response) => {
   try {
-    const postId = parseInt(req.params.postId);
-    const userId = req.user!.userId; // Use authenticated user ID
+    const postId = parseInt(req.params.postId, 10);
+    if (isNaN(postId)) return res.status(400).json({ error: 'Invalid post ID' });
+    const userId = req.user!.userId;
 
     const post = await prisma.post.findUnique({
       where: { id: postId },
