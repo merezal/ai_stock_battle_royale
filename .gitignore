@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .env
+client/src/api/demo-data.json
 *.log
 .DS_Store
 postgres_docker/docker_volume/

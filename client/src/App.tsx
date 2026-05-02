@@ -36,7 +36,7 @@ function AdminRoute() {
 function AppRoutes() {
   const { userId } = useCurrentUser();
 
-  if (!userId) {
+  if (userId === null) {
     return (
       <Routes>
         <Route path="/login" element={<Login />} />

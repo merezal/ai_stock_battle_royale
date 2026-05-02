@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { type Socket } from 'socket.io-client';
 import { createSocket, disconnectSocket } from '../lib/socket';
 import type { BotActivityLog, BotStatus, AdminLog } from '../api/client';
+import { DEMO } from '../api/demo';
 
 interface SocketContextType {
   socket: Socket | null;
@@ -17,6 +18,11 @@ export function SocketProvider({
   userId: number | null;
   children: ReactNode;
 }) {
+  // Demo mode: no WebSocket connection, data is static
+  if (DEMO) {
+    return <SocketContext.Provider value={{ socket: null }}>{children}</SocketContext.Provider>;
+  }
+
   const queryClient = useQueryClient();
   const socketRef = useRef<Socket | null>(null);
 
