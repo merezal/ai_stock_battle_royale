@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import ReactMarkdown from 'react-markdown';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { TBtn } from '../components/TBtn';
 import {
@@ -256,6 +257,7 @@ export function Bot() {
     queryKey: ['botPrompt', user?.id],
     queryFn: getBotPrompt,
     enabled: !!user?.id,
+    refetchInterval: 15000,
   });
 
   useEffect(() => {
@@ -396,6 +398,46 @@ export function Bot() {
                 >
                   {runOnceMutation.isPending ? 'Running...' : 'Run once'}
                 </TBtn>
+              </div>
+            )}
+          </div>
+
+          {/* Perspective */}
+          <div style={{ padding: 16, borderBottom: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 12 }}>
+              <span className="t-label">Perspective</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-subtle)' }}>bot-authored · read only</span>
+            </div>
+            {botPrompt?.perspective ? (
+              <div style={{
+                background: 'var(--bg-sunken)', border: '1px solid var(--border)',
+                padding: '12px 16px', maxHeight: 280, overflow: 'auto',
+                fontFamily: 'var(--font-mono)', fontSize: 12, lineHeight: 1.7,
+                color: 'var(--fg-muted)',
+              }}>
+                <ReactMarkdown
+                  components={{
+                    p: ({ children }) => <p style={{ margin: '0 0 8px' }}>{children}</p>,
+                    ul: ({ children }) => <ul style={{ margin: '0 0 8px', paddingLeft: 20 }}>{children}</ul>,
+                    ol: ({ children }) => <ol style={{ margin: '0 0 8px', paddingLeft: 20 }}>{children}</ol>,
+                    li: ({ children }) => <li style={{ marginBottom: 2 }}>{children}</li>,
+                    strong: ({ children }) => <strong style={{ color: 'var(--fg)', fontWeight: 600 }}>{children}</strong>,
+                    h1: ({ children }) => <div style={{ color: 'var(--fg)', fontWeight: 600, marginBottom: 6 }}>{children}</div>,
+                    h2: ({ children }) => <div style={{ color: 'var(--fg)', fontWeight: 600, marginBottom: 4, fontSize: 11 }}>{children}</div>,
+                    h3: ({ children }) => <div style={{ color: 'var(--fg-muted)', fontWeight: 600, marginBottom: 4 }}>{children}</div>,
+                    code: ({ children }) => <code style={{ background: 'var(--bg-elevated)', padding: '1px 4px', borderRadius: 2 }}>{children}</code>,
+                    hr: () => <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '8px 0' }} />,
+                  }}
+                >
+                  {botPrompt.perspective}
+                </ReactMarkdown>
+              </div>
+            ) : (
+              <div style={{
+                fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--fg-subtle)',
+                padding: 16, background: 'var(--bg-sunken)', border: '1px solid var(--border)',
+              }}>
+                ∅ No perspective yet — the agent will write one after its first turn.
               </div>
             )}
           </div>

@@ -148,6 +148,7 @@ model LlmPrompt {
   id           Int      @id @default(autoincrement()) @map("prompt_id")
   userId       Int      @map("user_id")
   promptText   String   @map("prompt_text") @db.Text
+  perspective  String?  @map("perspective") @db.Text
   isActive     Boolean  @default(false) @map("is_active")
   createdAt    DateTime @default(now()) @map("created_at")
   lastModified DateTime @default(now()) @map("last_modified")
