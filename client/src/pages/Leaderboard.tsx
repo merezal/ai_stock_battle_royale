@@ -2,9 +2,7 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { getLeaderboard } from '../api/client';
 import { useCurrentUser } from '../hooks/useCurrentUser';
-
-const fmt = (v: number) =>
-  '§ ' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+import { fmt } from '../utils/format';
 
 export function Leaderboard() {
   const { userId } = useCurrentUser();
@@ -32,7 +30,7 @@ export function Leaderboard() {
       </div>
 
       {/* Table */}
-      <div style={{ flex: 1, overflow: 'auto' }}>
+      <div className="sr-table-wrap" style={{ flex: 1, overflow: 'auto' }}>
         {isLoading ? (
           <div style={{ padding: 24, fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--fg-muted)' }}>
             Loading...

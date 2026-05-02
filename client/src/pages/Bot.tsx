@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCurrentUser } from '../hooks/useCurrentUser';
+import { TBtn } from '../components/TBtn';
 import {
   getBotPrompt,
   saveBotPrompt,
@@ -15,30 +16,6 @@ import {
   type BotStatus,
 } from '../api/client';
 
-// ── Terminal primitives ────────────────────────────────────────
-
-function TBtn({ children, onClick, variant = 'primary', disabled = false, style }: {
-  children: React.ReactNode; onClick?: () => void;
-  variant?: 'primary' | 'ghost' | 'minimal'; disabled?: boolean;
-  style?: React.CSSProperties;
-}) {
-  const variants: Record<string, React.CSSProperties> = {
-    primary: { background: 'var(--fg)', color: 'var(--bg)', borderColor: 'var(--fg)' },
-    ghost:   { background: 'transparent', color: 'var(--fg)', borderColor: 'var(--border-strong)' },
-    minimal: { background: 'transparent', color: 'var(--fg-muted)', borderColor: 'transparent' },
-  };
-  return (
-    <button onClick={disabled ? undefined : onClick} style={{
-      fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 11,
-      letterSpacing: '0.08em', textTransform: 'uppercase',
-      height: 36, padding: '0 16px', borderRadius: 0,
-      border: '1px solid', cursor: disabled ? 'not-allowed' : 'pointer',
-      opacity: disabled ? 0.4 : 1,
-      transition: 'opacity var(--dur-1) var(--ease-out)',
-      ...variants[variant], ...style,
-    }}>{children}</button>
-  );
-}
 
 // ── Mandate Composer Modal ─────────────────────────────────────
 
@@ -178,12 +155,12 @@ function MandateComposer({
           padding: '14px 20px', borderTop: '1px solid var(--border)',
           display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center',
         }}>
-          <TBtn variant="ghost" onClick={onRunOnce} disabled={running || !promptText}>
+          <TBtn size="lg" variant="ghost" onClick={onRunOnce} disabled={running || !promptText}>
             {running ? 'Running...' : 'Run once'}
           </TBtn>
           <div style={{ display: 'flex', gap: 8 }}>
-            <TBtn variant="ghost" onClick={onClose}>Cancel</TBtn>
-            <TBtn onClick={onSave} disabled={!hasChanges || saving}>
+            <TBtn size="lg" variant="ghost" onClick={onClose}>Cancel</TBtn>
+            <TBtn size="lg" onClick={onSave} disabled={!hasChanges || saving}>
               {saving ? 'Saving...' : 'Save mandate →'}
             </TBtn>
           </div>
@@ -224,6 +201,9 @@ function LogEntry({ log, expanded, onToggle }: { log: BotActivityLog; expanded: 
           }}>
             {isThought ? 'AI reasoning' : log.actionType}
           </span>
+          {!isThought && isSuccess === true && (
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-muted)' }}>◼ ok</span>
+          )}
           {isThought && shouldTruncate && (
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-subtle)' }}>
               {expanded ? '▲ collapse' : '▼ expand'}
@@ -243,9 +223,9 @@ function LogEntry({ log, expanded, onToggle }: { log: BotActivityLog; expanded: 
       )}
 
       {!isThought && (
-        <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
           {log.actionDetails && Object.keys(log.actionDetails).length > 0 && (
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-subtle)' }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-subtle)', wordBreak: 'break-all' }}>
               {JSON.stringify(log.actionDetails)}
             </span>
           )}
@@ -253,9 +233,6 @@ function LogEntry({ log, expanded, onToggle }: { log: BotActivityLog; expanded: 
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--state-loss)' }}>
               ERR / {(log.result as { error: string }).error}
             </span>
-          )}
-          {isSuccess === true && (
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-muted)' }}>◼ ok</span>
           )}
         </div>
       )}
@@ -372,13 +349,13 @@ export function Bot() {
           </span>
         )}
         <span style={{ flex: 1 }} />
-        <TBtn onClick={() => setComposerOpen(true)}>
+        <TBtn size="lg" onClick={() => setComposerOpen(true)}>
           {botPrompt?.promptId ? 'Edit mandate →' : '+ New mandate'}
         </TBtn>
       </div>
 
       {/* Content */}
-      <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+      <div className="sr-content-row" style={{ flex: 1, display: 'flex', minHeight: 0 }}>
         {/* Main area */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
           {/* Current mandate preview */}
@@ -404,6 +381,7 @@ export function Bot() {
             {botPrompt?.promptId && (
               <div style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
                 <TBtn
+                  size="lg"
                   variant={botPrompt.isActive ? 'ghost' : 'primary'}
                   onClick={() => toggleMutation.mutate(!botPrompt.isActive)}
                   disabled={toggleMutation.isPending}
@@ -411,6 +389,7 @@ export function Bot() {
                   {botPrompt.isActive ? '◻ Halt agent' : '◼ Deploy agent'}
                 </TBtn>
                 <TBtn
+                  size="lg"
                   variant="ghost"
                   onClick={() => runOnceMutation.mutate()}
                   disabled={runOnceMutation.isPending || !botPrompt.promptId}
@@ -486,7 +465,7 @@ export function Bot() {
         </div>
 
         {/* Activity log sidebar */}
-        <div style={{
+        <div className="sr-panel-right" style={{
           width: 400, flexShrink: 0, borderLeft: '1px solid var(--border)',
           display: 'flex', flexDirection: 'column',
         }}>

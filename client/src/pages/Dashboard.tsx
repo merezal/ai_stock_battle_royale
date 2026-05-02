@@ -15,17 +15,9 @@ import {
   foundCompany,
 } from '../api/client';
 import { useCurrentUser } from '../hooks/useCurrentUser';
+import { fmt, fmtShort } from '../utils/format';
+import { TBtn } from '../components/TBtn';
 import type { Company, Transaction } from '../types';
-
-// ── Helpers ────────────────────────────────────────────────────
-
-const fmt = (v: number) =>
-  '§ ' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-const fmtShort = (v: number) =>
-  v >= 1_000_000 ? (v / 1_000_000).toFixed(2) + 'M'
-  : v >= 1_000   ? (v / 1_000).toFixed(1) + 'K'
-  : String(v);
 
 // ── Sparkline ──────────────────────────────────────────────────
 
@@ -161,32 +153,6 @@ function Field({ label, value, onChange, placeholder, type = 'text' }: {
   );
 }
 
-function TBtn({ children, onClick, variant = 'primary', disabled = false, style }: {
-  children: React.ReactNode; onClick?: () => void;
-  variant?: 'primary' | 'ghost' | 'minimal'; disabled?: boolean;
-  style?: React.CSSProperties;
-}) {
-  const variants: Record<string, React.CSSProperties> = {
-    primary: { background: 'var(--fg)', color: 'var(--bg)', borderColor: 'var(--fg)' },
-    ghost:   { background: 'transparent', color: 'var(--fg)', borderColor: 'var(--border-strong)' },
-    minimal: { background: 'transparent', color: 'var(--fg)', borderColor: 'transparent' },
-  };
-  return (
-    <button
-      onClick={disabled ? undefined : onClick}
-      style={{
-        fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 11,
-        letterSpacing: '0.08em', textTransform: 'uppercase',
-        height: 32, padding: '0 14px', borderRadius: 0,
-        border: '1px solid', cursor: disabled ? 'not-allowed' : 'pointer',
-        opacity: disabled ? 0.4 : 1,
-        transition: 'opacity var(--dur-1) var(--ease-out)',
-        ...variants[variant], ...style,
-      }}
-    >{children}</button>
-  );
-}
-
 // ── Entity Panel ───────────────────────────────────────────────
 
 function EntityPanel({ company, onDeselect }: { company: Company; onDeselect: () => void }) {
@@ -265,7 +231,7 @@ function EntityPanel({ company, onDeselect }: { company: Company; onDeselect: ()
   const topAsks = (orderBook?.asks ?? []).slice(0, 3);
 
   return (
-    <aside style={{
+    <aside className="sr-panel-right" style={{
       width: 380, flexShrink: 0,
       borderLeft: '1px solid var(--border)',
       display: 'flex', flexDirection: 'column',
@@ -326,13 +292,13 @@ function EntityPanel({ company, onDeselect }: { company: Company; onDeselect: ()
                     <span style={{ color: 'var(--fg-subtle)', marginLeft: 8 }}>@{b.username}</span>
                   </div>
                   {b.username !== user?.username ? (
-                    <TBtn variant="ghost" style={{ fontSize: 10, height: 24, padding: '0 8px' }}
+                    <TBtn variant="ghost" size="sm"
                       onClick={() => fulfillBidMutation.mutate(b.bidId)}
                       disabled={fulfillBidMutation.isPending}>
                       Sell
                     </TBtn>
                   ) : (
-                    <TBtn variant="minimal" style={{ fontSize: 10, height: 24, padding: '0 8px', color: 'var(--fg-muted)' }}
+                    <TBtn variant="minimal" size="sm"
                       onClick={() => cancelBidMutation.mutate(b.bidId)}
                       disabled={cancelBidMutation.isPending}>
                       Cancel
@@ -358,13 +324,13 @@ function EntityPanel({ company, onDeselect }: { company: Company; onDeselect: ()
                     <span style={{ color: 'var(--fg-subtle)', marginLeft: 8 }}>@{a.username}</span>
                   </div>
                   {a.username !== user?.username ? (
-                    <TBtn variant="ghost" style={{ fontSize: 10, height: 24, padding: '0 8px' }}
+                    <TBtn variant="ghost" size="sm"
                       onClick={() => fulfillAskMutation.mutate(a.askId)}
                       disabled={fulfillAskMutation.isPending}>
                       Buy
                     </TBtn>
                   ) : (
-                    <TBtn variant="minimal" style={{ fontSize: 10, height: 24, padding: '0 8px', color: 'var(--fg-muted)' }}
+                    <TBtn variant="minimal" size="sm"
                       onClick={() => cancelAskMutation.mutate(a.askId)}
                       disabled={cancelAskMutation.isPending}>
                       Cancel
@@ -465,7 +431,7 @@ function MarketTable({
   const cols = ['Entity', 'Price', 'Shares', 'Market Cap', 'Founded by'];
 
   return (
-    <div style={{ flex: 1, overflow: 'auto' }}>
+    <div className="sr-table-wrap" style={{ flex: 1, overflow: 'auto' }}>
       <table style={{
         width: '100%', borderCollapse: 'collapse',
         fontFamily: 'var(--font-mono)', fontSize: 12,
@@ -538,7 +504,6 @@ export function Dashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const selected = searchParams.get('entity');
   const [showFoundModal, setShowFoundModal] = useState(false);
-  const [timeFilter, setTimeFilter] = useState('24H');
 
   const handleSelect = (ticker: string) => setSearchParams({ entity: ticker }, { replace: true });
   const handleDeselect = () => {
@@ -571,22 +536,6 @@ export function Dashboard() {
         </span>
         <span style={{ flex: 1 }} />
 
-        {/* Time filter */}
-        <div style={{ display: 'inline-flex', border: '1px solid var(--border-strong)' }}>
-          {['1H', '24H', '7D', '30D', 'ALL'].map((t, i) => (
-            <button key={t} onClick={() => setTimeFilter(t)} style={{
-              fontFamily: 'var(--font-display)', fontSize: 11, fontWeight: 500,
-              letterSpacing: '0.08em', textTransform: 'uppercase',
-              padding: '5px 9px',
-              background: timeFilter === t ? 'var(--fg)' : 'transparent',
-              color: timeFilter === t ? 'var(--bg)' : 'var(--fg-muted)',
-              border: 0,
-              borderRight: i < 4 ? '1px solid var(--border-strong)' : 0,
-              cursor: 'pointer',
-            }}>{t}</button>
-          ))}
-        </div>
-
         {userId && (
           <button
             onClick={() => setShowFoundModal(true)}
@@ -605,7 +554,7 @@ export function Dashboard() {
       </div>
 
       {/* Main content */}
-      <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+      <div className="sr-content-row" style={{ flex: 1, display: 'flex', minHeight: 0 }}>
         {isLoading ? (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--fg-muted)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
             Loading market...

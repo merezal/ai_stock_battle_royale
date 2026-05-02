@@ -45,7 +45,7 @@ function TopBar({
         <span className="t-mark" style={{ fontSize: 13 }}>STOCK ROYALE</span>
       </Link>
       <span style={{ color: 'var(--fg-subtle)' }}>/</span>
-      <span className="t-label">Synthetic exchange</span>
+      <span className="sr-topbar-label t-label">Synthetic exchange</span>
       <span style={{ flex: 1 }} />
 
       {/* Market state badge */}
@@ -66,11 +66,11 @@ function TopBar({
         {isRunning ? 'Market open' : 'Market closed'}
       </span>
 
-      <span style={{ color: 'var(--fg-muted)' }}>
+      <span className="sr-topbar-operator" style={{ color: 'var(--fg-muted)' }}>
         OPERATOR / <span style={{ color: 'var(--fg)' }}>{operator}</span>
       </span>
 
-      <span className="t-num muted">{clock}</span>
+      <span className="sr-topbar-clock t-num muted">{clock}</span>
 
       <button
         onClick={onLogout}
@@ -112,7 +112,7 @@ function Sidebar({
   ];
 
   return (
-    <aside style={{
+    <aside className="sr-sidebar" style={{
       width: 200, flexShrink: 0,
       borderRight: '1px solid var(--border)',
       background: 'var(--bg)',
@@ -166,7 +166,7 @@ function CommandBar({ companies }: { companies: Company[] }) {
     : '   STOCK ROYALE · SYNTHETIC EXCHANGE   ';
 
   return (
-    <footer style={{
+    <footer className="sr-cmdbar" style={{
       height: 32, flexShrink: 0,
       borderTop: '1px solid var(--border)',
       display: 'flex', alignItems: 'center',
@@ -185,6 +185,39 @@ function CommandBar({ companies }: { companies: Company[] }) {
         </span>
       </span>
     </footer>
+  );
+}
+
+// ── MobileNav ──────────────────────────────────────────────────
+
+function MobileNav({ active }: { active: string }) {
+  const items = [
+    { key: '/',            label: 'Market' },
+    { key: '/portfolio',   label: 'Portfolio' },
+    { key: '/bot',         label: 'Mandates' },
+    { key: '/leaderboard', label: 'Operators' },
+    { key: '/posts',       label: 'Feed' },
+  ];
+  return (
+    <nav className="sr-mobile-nav" style={{ padding: '0 8px' }}>
+      {items.map(it => (
+        <Link
+          key={it.key}
+          to={it.key}
+          style={{
+            flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            gap: 3, textDecoration: 'none',
+            fontFamily: 'var(--font-display)', fontSize: 9, fontWeight: 500,
+            letterSpacing: '0.08em', textTransform: 'uppercase',
+            color: active === it.key ? 'var(--fg)' : 'var(--fg-muted)',
+            borderTop: active === it.key ? '1px solid var(--fg)' : '1px solid transparent',
+            marginTop: -1, paddingTop: 8,
+          }}
+        >
+          {it.label}
+        </Link>
+      ))}
+    </nav>
   );
 }
 
@@ -236,7 +269,7 @@ export function Layout() {
       data-theme="dark"
       style={{
         display: 'flex', flexDirection: 'column',
-        height: '100vh', overflow: 'hidden',
+        height: '100dvh', overflow: 'hidden',
         background: 'var(--bg)', color: 'var(--fg)',
       }}
     >
@@ -269,6 +302,7 @@ export function Layout() {
         </main>
       </div>
       <CommandBar companies={companies} />
+      <MobileNav active={active} />
     </div>
   );
 }

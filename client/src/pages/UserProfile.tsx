@@ -2,10 +2,8 @@ import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { getPortfolioByUsername, getTransactions, getPortfolioHistory } from '../api/client';
 import { useCurrentUser } from '../hooks/useCurrentUser';
+import { fmt, STARTING_CAPITAL } from '../utils/format';
 import type { Transaction } from '../types';
-
-const fmt = (v: number) =>
-  '§ ' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 function Stat({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
@@ -69,9 +67,8 @@ export function UserProfile() {
   }
 
   const isOwnProfile = currentUser?.username === username;
-  const startValue = 100000;
-  const pnl = portfolio.totalValue - startValue;
-  const pnlPct = ((pnl / startValue) * 100).toFixed(2);
+  const pnl = portfolio.totalValue - STARTING_CAPITAL;
+  const pnlPct = ((pnl / STARTING_CAPITAL) * 100).toFixed(2);
   const isGain = pnl >= 0;
 
   // simple sparkline from history
@@ -105,11 +102,11 @@ export function UserProfile() {
         )}
       </div>
 
-      <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+      <div className="sr-content-row" style={{ flex: 1, display: 'flex', minHeight: 0 }}>
         {/* Main */}
         <div style={{ flex: 1, overflow: 'auto' }}>
           {/* Stats */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)' }}>
+          <div className="sr-stats-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)' }}>
             <Stat label="Total value" value={fmt(portfolio.totalValue)} highlight />
             <Stat label="Cash" value={fmt(portfolio.cashBalance)} />
             <Stat label="Available cash" value={fmt(portfolio.availableCash)} />
@@ -173,7 +170,7 @@ export function UserProfile() {
         </div>
 
         {/* Transaction log sidebar */}
-        <div style={{ width: 360, flexShrink: 0, borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
+        <div className="sr-panel-right" style={{ width: 360, flexShrink: 0, borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)' }}>
             <span className="t-label">Transaction log / {transactions.length}</span>
           </div>

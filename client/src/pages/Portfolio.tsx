@@ -10,10 +10,9 @@ import {
 } from '../api/client';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { PortfolioChart } from '../components/PortfolioChart';
+import { fmt, STARTING_CAPITAL } from '../utils/format';
+import { TBtn } from '../components/TBtn';
 import type { Transaction, Bid, Ask } from '../types';
-
-const fmt = (v: number) =>
-  '§ ' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
@@ -22,27 +21,6 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
       <div style={{ fontFamily: 'var(--font-mono)', fontSize: 20, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
       {sub && <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-subtle)', marginTop: 4 }}>{sub}</div>}
     </div>
-  );
-}
-
-function TBtn({ children, onClick, variant = 'ghost', disabled = false, style }: {
-  children: React.ReactNode; onClick?: () => void;
-  variant?: 'primary' | 'ghost' | 'minimal'; disabled?: boolean; style?: React.CSSProperties;
-}) {
-  const variants: Record<string, React.CSSProperties> = {
-    primary: { background: 'var(--fg)', color: 'var(--bg)', borderColor: 'var(--fg)' },
-    ghost:   { background: 'transparent', color: 'var(--fg)', borderColor: 'var(--border-strong)' },
-    minimal: { background: 'transparent', color: 'var(--fg-muted)', borderColor: 'transparent' },
-  };
-  return (
-    <button onClick={disabled ? undefined : onClick} style={{
-      fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 10,
-      letterSpacing: '0.08em', textTransform: 'uppercase',
-      height: 24, padding: '0 10px', borderRadius: 0,
-      border: '1px solid', cursor: disabled ? 'not-allowed' : 'pointer',
-      opacity: disabled ? 0.4 : 1,
-      ...variants[variant], ...style,
-    }}>{children}</button>
   );
 }
 
@@ -112,8 +90,8 @@ export function Portfolio() {
     );
   }
 
-  const pnl = (portfolio?.totalValue ?? 0) - 100000;
-  const pnlPct = ((pnl / 100000) * 100).toFixed(2);
+  const pnl = (portfolio?.totalValue ?? 0) - STARTING_CAPITAL;
+  const pnlPct = ((pnl / STARTING_CAPITAL) * 100).toFixed(2);
   const isGain = pnl >= 0;
 
   return (
@@ -127,7 +105,7 @@ export function Portfolio() {
         <span style={{ color: 'var(--fg-subtle)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>/</span>
         <span className="t-mark" style={{ fontSize: 13 }}>{user.username}</span>
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: isGain ? 'var(--fg)' : 'var(--state-loss)' }}>
-          {isGain ? '+' : ''}{pnlPct}% from § 100,000
+          {isGain ? '+' : ''}{pnlPct}% from § {STARTING_CAPITAL.toLocaleString()}
         </span>
         <span style={{ flex: 1 }} />
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-subtle)' }}>
@@ -135,12 +113,12 @@ export function Portfolio() {
         </span>
       </div>
 
-      <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+      <div className="sr-content-row" style={{ flex: 1, display: 'flex', minHeight: 0 }}>
         {/* Left: chart + holdings */}
         <div style={{ flex: 1, overflow: 'auto' }}>
           {/* Summary stats */}
           {portfolio && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)' }}>
+            <div className="sr-stats-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)' }}>
               <Stat label="Total value" value={fmt(portfolio.totalValue)} />
               <Stat label="Cash" value={fmt(portfolio.cashBalance)} sub={`§ ${portfolio.availableCash.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} available`} />
               <Stat label="Stock exposure" value={fmt(portfolio.stockValue)} />
@@ -199,7 +177,7 @@ export function Portfolio() {
         </div>
 
         {/* Right panel: open orders + transaction log */}
-        <div style={{ width: 360, flexShrink: 0, borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
+        <div className="sr-panel-right" style={{ width: 360, flexShrink: 0, borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
           {/* Open orders */}
           <div style={{ flexShrink: 0 }}>
             <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -228,7 +206,7 @@ export function Portfolio() {
                       </span>
                       <span style={{ color: 'var(--fg-muted)', marginLeft: 6 }}>× {bid.shares} @ {fmt(bid.pricePerShare)}</span>
                     </div>
-                    <TBtn onClick={() => cancelBidMutation.mutate(bid.bidId)} disabled={cancelBidMutation.isPending}>
+                    <TBtn size="sm" onClick={() => cancelBidMutation.mutate(bid.bidId)} disabled={cancelBidMutation.isPending}>
                       Cancel
                     </TBtn>
                   </div>
@@ -246,7 +224,7 @@ export function Portfolio() {
                       </span>
                       <span style={{ color: 'var(--fg-muted)', marginLeft: 6 }}>× {ask.shares} @ {fmt(ask.pricePerShare)}</span>
                     </div>
-                    <TBtn onClick={() => cancelAskMutation.mutate(ask.askId)} disabled={cancelAskMutation.isPending}>
+                    <TBtn size="sm" onClick={() => cancelAskMutation.mutate(ask.askId)} disabled={cancelAskMutation.isPending}>
                       Cancel
                     </TBtn>
                   </div>

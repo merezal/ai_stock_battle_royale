@@ -2,10 +2,8 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { getCompanies } from '../api/client';
+import { fmt } from '../utils/format';
 import type { Company } from '../types';
-
-const fmtPrice = (v: number) =>
-  '§ ' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 // ── Shared primitives ──────────────────────────────────────────
 
@@ -63,11 +61,11 @@ function Section({
     <section
       id={id}
       data-theme={theme}
-      style={{ background: 'var(--bg)', color: 'var(--fg)', padding: '128px 24px', position: 'relative', scrollMarginTop: 64, ...style }}
+      style={{ background: 'var(--bg)', color: 'var(--fg)', padding: 'clamp(32px, 5vh, 80px) clamp(16px, 4vw, 48px)', position: 'relative', scrollMarginTop: 64, ...style }}
     >
       <div style={{ maxWidth: 1280, margin: '0 auto' }}>
         {label && (
-          <div className="t-label" style={{ marginBottom: 64, paddingBottom: 12, borderBottom: '1px solid var(--border)' }}>
+          <div className="t-label" style={{ marginBottom: 'clamp(24px, 4vh, 48px)', paddingBottom: 12, borderBottom: '1px solid var(--border)' }}>
             {label}
           </div>
         )}
@@ -103,7 +101,7 @@ function Header() {
     >
       <div style={{ maxWidth: 1280, margin: '0 auto', width: '100%', display: 'flex', alignItems: 'center', gap: 32 }}>
         <span className="t-mark" style={{ fontSize: 14, color: 'var(--fg)' }}>STOCK ROYALE</span>
-        <nav style={{ display: 'flex', gap: 24, marginLeft: 32, fontFamily: 'var(--font-display)', fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+        <nav className="sr-header-nav" style={{ display: 'flex', gap: 24, marginLeft: 32, fontFamily: 'var(--font-display)', fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
           {['Manifesto', 'Mechanics', 'Entities'].map(l => (
             <a
               key={l}
@@ -128,17 +126,11 @@ function Hero() {
       data-theme="dark"
       style={{
         background: 'var(--bg)', color: 'var(--fg)',
-        minHeight: '100vh', position: 'relative', overflow: 'hidden',
+        minHeight: '100dvh', position: 'relative', overflow: 'hidden',
         display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
         padding: '120px 24px 64px',
       }}
     >
-      {/* Atmospheric grain */}
-      <div style={{
-        position: 'absolute', inset: 0, pointerEvents: 'none',
-        opacity: 0.06, mixBlendMode: 'screen',
-        backgroundImage: "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>\")",
-      }} />
       {/* Hairline grid */}
       <div style={{
         position: 'absolute', inset: 0, pointerEvents: 'none', opacity: 0.5,
@@ -174,14 +166,14 @@ function Hero() {
           <span style={{ color: 'var(--fg-subtle)' }}>mediated by</span><br />
           language.
         </h1>
-        <div style={{
+        <div className="sr-hero-bottom" style={{
           marginTop: 48, display: 'flex', alignItems: 'flex-end',
           justifyContent: 'space-between', flexWrap: 'wrap', gap: 32,
         }}>
           <p style={{ maxWidth: 480, color: 'var(--fg-muted)', fontSize: 16, lineHeight: 1.5, margin: 0 }}>
             STOCK ROYALE is a synthetic stock exchange. Operators found entities, distribute shares, and write the prompts that drive autonomous trading agents. The market that emerges is yours.
           </p>
-          <div style={{ display: 'flex', gap: 12 }}>
+          <div className="sr-hero-ctas" style={{ display: 'flex', gap: 12 }}>
             <Btn to="/login" size="lg">Enter →</Btn>
             <Btn href="#manifesto" size="lg" variant="ghost">Read manifesto</Btn>
           </div>
@@ -199,14 +191,14 @@ function Manifesto() {
       <div style={{ maxWidth: 960 }}>
         <h2 style={{
           fontFamily: 'var(--font-display)', fontWeight: 500,
-          fontSize: 'clamp(40px, 5vw, 72px)', lineHeight: 1.05,
-          letterSpacing: '-0.02em', margin: 0, marginBottom: 48, textWrap: 'pretty',
+          fontSize: 'clamp(24px, 3vw, 52px)', lineHeight: 1.1,
+          letterSpacing: '-0.02em', margin: 0, marginBottom: 'clamp(20px, 3vh, 40px)', textWrap: 'pretty',
         }}>
           Real markets are slow. Reflexes are dulled by regulation, latency, and people. STOCK ROYALE is a place where the price is the prompt — where every operator competes to write the most decisive paragraph.
         </h2>
-        <div style={{
-          display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 48,
-          paddingTop: 48, borderTop: '1px solid var(--border)',
+        <div className="sr-manifesto-grid" style={{
+          display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 32,
+          paddingTop: 'clamp(20px, 3vh, 40px)', borderTop: '1px solid var(--border)',
         }}>
           {[
             'Found an entity. Issue shares.',
@@ -236,21 +228,21 @@ function HowItWorks() {
     <Section id="mechanics" label="02 / Mechanics" theme="light">
       <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 0 }}>
         {steps.map((s, i) => (
-          <div key={s.n} style={{
+          <div className="sr-how-step" key={s.n} style={{
             display: 'grid', gridTemplateColumns: '120px 1fr 1fr', gap: 32,
-            padding: '48px 0',
+            padding: 'clamp(24px, 4vh, 48px) 0',
             borderTop: '1px solid var(--border)',
             borderBottom: i === steps.length - 1 ? '1px solid var(--border)' : 'none',
             alignItems: 'start',
           }}>
             <div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 64, fontWeight: 500, lineHeight: 1, color: 'var(--fg)' }}>{s.n}</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 'clamp(36px, 4vw, 64px)', fontWeight: 500, lineHeight: 1, color: 'var(--fg)' }}>{s.n}</div>
               <div className="t-label" style={{ marginTop: 12 }}>{s.label}</div>
             </div>
             <p style={{ fontSize: 24, lineHeight: 1.35, margin: 0, fontFamily: 'var(--font-display)', fontWeight: 500, letterSpacing: '-0.01em', textWrap: 'pretty' }}>
               {s.body}
             </p>
-            <div style={{
+            <div className="sr-how-code" style={{
               background: 'var(--bg-sunken)', border: '1px solid var(--border)',
               padding: 16, fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--fg-muted)',
               display: 'flex', flexDirection: 'column', gap: 8,
@@ -273,7 +265,7 @@ function EntityTicker({ companies }: { companies: Company[] }) {
   const rows = companies.length > 0
     ? companies.slice(0, 8).map(c => ({
         sym: c.ticker,
-        val: fmtPrice(c.currentPrice),
+        val: fmt(c.currentPrice),
         name: c.companyName,
       }))
     : [
@@ -301,7 +293,7 @@ function EntityTicker({ companies }: { companies: Company[] }) {
       </div>
       <div style={{ display: 'flex', gap: 0, animation: 'sr-scroll-x 60s linear infinite', whiteSpace: 'nowrap' }}>
         {all.map((r, i) => (
-          <div key={i} style={{
+          <div key={`${r.sym}-${i}`} style={{
             flex: '0 0 auto', minWidth: 260,
             padding: '24px 32px',
             borderRight: '1px solid var(--border)',
@@ -322,7 +314,7 @@ function EntityTicker({ companies }: { companies: Company[] }) {
 
 function CTA() {
   return (
-    <section style={{ background: 'var(--bg)', color: 'var(--fg)', padding: '160px 24px', textAlign: 'left' }}>
+    <section style={{ background: 'var(--bg)', color: 'var(--fg)', padding: 'clamp(64px, 10vh, 160px) 24px', textAlign: 'left' }}>
       <div style={{ maxWidth: 1280, margin: '0 auto' }}>
         <div className="t-label" style={{ marginBottom: 48, paddingBottom: 12, borderBottom: '1px solid var(--border)' }}>
           04 / Enter
@@ -369,11 +361,11 @@ function Footer() {
       style={{ background: 'var(--bg)', color: 'var(--fg)', padding: '64px 24px 32px', borderTop: '1px solid var(--border)' }}
     >
       <div style={{ maxWidth: 1280, margin: '0 auto' }}>
-        <div style={{
+        <div className="sr-footer-grid" style={{
           display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 32,
           paddingBottom: 48, borderBottom: '1px solid var(--border)',
         }}>
-          <div>
+          <div className="sr-footer-brand">
             <div className="t-mark" style={{ fontSize: 14 }}>STOCK ROYALE</div>
             <p style={{ color: 'var(--fg-muted)', fontSize: 13, marginTop: 12, maxWidth: 320 }}>
               A synthetic exchange. Operator-founded entities, agent-mediated price discovery.
@@ -407,7 +399,7 @@ export function Landing() {
   });
 
   return (
-    <div data-theme="light" style={{ background: 'var(--bg)', color: 'var(--fg)' }}>
+    <div data-theme="dark" style={{ background: 'var(--bg)', color: 'var(--fg)' }}>
       <Header />
       <Hero />
       <Manifesto />

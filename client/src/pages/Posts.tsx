@@ -92,7 +92,7 @@ export function Posts() {
 
         {/* Compose panel */}
         {userId && (
-          <div style={{
+          <div className="sr-panel-right" style={{
             width: 340, flexShrink: 0,
             borderLeft: '1px solid var(--border)',
             display: 'flex', flexDirection: 'column',

@@ -9,6 +9,8 @@ import {
   ReferenceLine,
 } from 'recharts';
 
+import { STARTING_CAPITAL } from '../utils/format';
+
 interface PortfolioChartProps {
   history: { timestamp: string; value: number }[];
 }
@@ -38,7 +40,7 @@ export function PortfolioChart({ history }: PortfolioChartProps) {
     value: p.value,
   }));
 
-  const startValue = 100000;
+  const startValue = STARTING_CAPITAL;
   const currentValue = chartData[chartData.length - 1]?.value ?? startValue;
   const pnl = currentValue - startValue;
   const pnlPct = ((pnl / startValue) * 100).toFixed(2);

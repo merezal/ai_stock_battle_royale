@@ -73,8 +73,38 @@
   --dur-4: 960ms;
 }
 
-/* Light theme (default) */
-:root,
+/* Dark theme — also the root default so body/html resolve vars correctly */
+:root {
+  --bg:           var(--n-12);
+  --bg-elevated:  var(--n-11);
+  --bg-sunken:    var(--n-10);
+  --bg-inverse:   var(--n-00);
+  --bg-rgb:       10 10 10;
+
+  --fg:           var(--n-01);
+  --fg-strong:    var(--white);
+  --fg-muted:     var(--n-05);
+  --fg-subtle:    var(--n-07);
+  --fg-on-inverse: var(--n-12);
+
+  --border:        var(--n-09);
+  --border-strong: var(--n-07);
+  --border-inverse: var(--n-03);
+
+  --selection-bg: var(--n-00);
+  --selection-fg: var(--n-12);
+  --focus-ring:   var(--n-00);
+
+  --grad-protect: linear-gradient(180deg, var(--bg) 0%, rgb(var(--bg-rgb) / 0) 100%);
+  --grad-atmosphere: linear-gradient(180deg, var(--n-12) 0%, var(--n-11) 100%);
+
+  --elev-1: 0 1px 0 0 var(--border);
+  --elev-2: 0 24px 64px -32px rgb(0 0 0 / 0.5);
+
+  color-scheme: dark;
+}
+
+/* Light theme */
 [data-theme="light"] {
   --bg:           var(--n-00);
   --bg-elevated:  var(--n-01);
@@ -228,6 +258,79 @@ a:hover { text-decoration-color: var(--fg); }
 @keyframes sr-pulse   { 0%,100% { opacity: 1 } 50% { opacity: 0.3 } }
 @keyframes sr-tick    { from { transform: translateX(0) } to { transform: translateX(-33.333%) } }
 @keyframes sr-scroll-x { from { transform: translateX(0) } to { transform: translateX(-33.333%) } }
+
+/* ── Mobile / Responsive ──────────────────────────────────────── */
+
+/* Terminal bottom nav: hidden by default, shown on mobile */
+.sr-mobile-nav {
+  display: none;
+  height: 52px;
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  z-index: 10;
+}
+
+@media (max-width: 767px) {
+  /* Landing: hide header nav links */
+  .sr-header-nav { display: none !important; }
+
+  /* Landing: hero bottom row stacks vertically */
+  .sr-hero-bottom {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 24px !important;
+  }
+  .sr-hero-ctas { flex-direction: column !important; width: 100% !important; }
+  .sr-hero-ctas > * { width: 100% !important; justify-content: center !important; }
+
+  /* Landing: manifesto 3-col → 1-col */
+  .sr-manifesto-grid { grid-template-columns: 1fr !important; gap: 24px !important; }
+
+  /* Landing: how-it-works step → 1-col, hide code block */
+  .sr-how-step { grid-template-columns: 1fr !important; }
+  .sr-how-code { display: none !important; }
+
+  /* Landing: footer grid → 2-col, brand full-width */
+  .sr-footer-grid { grid-template-columns: 1fr 1fr !important; gap: 24px !important; }
+  .sr-footer-brand { grid-column: 1 / -1 !important; }
+
+  /* Terminal: hide sidebar and command bar */
+  .sr-sidebar { display: none !important; }
+  .sr-cmdbar  { display: none !important; }
+
+  /* Terminal: show bottom nav */
+  .sr-mobile-nav { display: flex !important; align-items: stretch; }
+
+  /* Terminal: hide decorative top-bar items */
+  .sr-topbar-label    { display: none !important; }
+  .sr-topbar-operator { display: none !important; }
+  .sr-topbar-clock    { display: none !important; }
+
+  /* Terminal: content row → column (panels stack below) */
+  .sr-content-row { flex-direction: column !important; overflow-y: auto !important; }
+
+  /* Terminal: right panels become full-width */
+  .sr-panel-right {
+    width: 100% !important;
+    min-width: 0 !important;
+    flex-shrink: 0 !important;
+    border-left: none !important;
+    border-top: 1px solid var(--border);
+    max-height: 420px;
+  }
+
+  /* Terminal: 4-col stats → 2-col */
+  .sr-stats-4 { grid-template-columns: repeat(2, 1fr) !important; }
+
+  /* Terminal: table horizontal scroll */
+  .sr-table-wrap { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+}
+
+@media (max-width: 479px) {
+  .sr-footer-grid  { grid-template-columns: 1fr !important; }
+  .sr-footer-brand { grid-column: 1 !important; }
+}
 
 /* ── Hover interaction states ─────────────────────────────────── */
 
