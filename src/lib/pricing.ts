@@ -1,4 +1,5 @@
 import { prisma } from './prisma';
+import { floorToCents } from './utils';
 
 // Number of recent transactions to include in VWAP calculation
 const VWAP_TRANSACTION_LIMIT = 20;
@@ -80,7 +81,7 @@ export async function getVWAPPrice(info: CompanyPriceInfo): Promise<number> {
     return 0;
   }
 
-  return (totalDollarValue * splitMultiplier) / totalWeightedShares;
+  return floorToCents((totalDollarValue * splitMultiplier) / totalWeightedShares);
 }
 
 /**

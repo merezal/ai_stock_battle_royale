@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { Prisma } from '@prisma/client';
 import { authenticate } from '../middleware/auth';
-import { sanitizeString, validateTicker, validateMinimumPrice } from '../lib/utils';
+import { sanitizeString, validateTicker, validateMinimumPrice, floorToCents } from '../lib/utils';
 import { getVWAPPrice } from '../lib/pricing';
 import { logger } from '../lib/logger';
 
@@ -11,42 +11,43 @@ const router = Router();
 // Found a new company
 router.post('/found', authenticate, async (req: Request, res: Response) => {
   try {
-    const userId = req.user!.userId; // Use authenticated user ID
+    const userId = req.user!.userId;
     const { tickerSymbol, companyName, investmentAmount, totalShares } = req.body;
 
-    if (!tickerSymbol || !companyName || !investmentAmount || !totalShares) {
+    if (!tickerSymbol || !companyName || investmentAmount === undefined || totalShares === undefined) {
       return res.status(400).json({
         error: 'tickerSymbol, companyName, investmentAmount, and totalShares are required',
       });
     }
 
-    // Validate and sanitize ticker
     const tickerValidation = validateTicker(tickerSymbol);
     if (!tickerValidation.valid) {
       return res.status(400).json({ error: tickerValidation.error });
     }
     const sanitizedTicker = tickerSymbol.toUpperCase().trim();
 
-    // Sanitize company name
     const sanitizedCompanyName = sanitizeString(companyName, 100);
     if (sanitizedCompanyName.length === 0) {
       return res.status(400).json({ error: 'Company name cannot be empty' });
     }
 
-    const investment = parseFloat(investmentAmount);
-    const shares = BigInt(totalShares);
-
-    if (investment <= 0 || shares <= 0) {
-      return res.status(400).json({ error: 'Investment and shares must be positive' });
+    const investmentRaw = parseFloat(investmentAmount);
+    if (isNaN(investmentRaw) || investmentRaw <= 0) {
+      return res.status(400).json({ error: 'investmentAmount must be a positive number' });
     }
+    const investment = floorToCents(investmentRaw);
 
-    // Validate that the initial price per share meets minimum threshold
-    const pricePerShare = investment / Number(shares);
+    const sharesNum = Number(totalShares);
+    if (!Number.isInteger(sharesNum) || sharesNum <= 0) {
+      return res.status(400).json({ error: 'totalShares must be a positive integer' });
+    }
+    const shares = BigInt(sharesNum);
+
+    const pricePerShare = floorToCents(investment / sharesNum);
     if (!validateMinimumPrice(pricePerShare)) {
       return res.status(400).json({ error: 'Price per share must be at least $0.01' });
     }
 
-    // Get user with account
     const user = await prisma.user.findUnique({
       where: { id: userId },
       include: { account: true },
@@ -63,9 +64,7 @@ router.post('/found', authenticate, async (req: Request, res: Response) => {
       });
     }
 
-    // Create company and update holdings in a transaction
     const result = await prisma.$transaction(async (tx) => {
-      // Deduct cash from user
       await tx.account.update({
         where: { userId },
         data: {
@@ -73,7 +72,6 @@ router.post('/found', authenticate, async (req: Request, res: Response) => {
         },
       });
 
-      // Create company
       const company = await tx.company.create({
         data: {
           tickerSymbol: sanitizedTicker,
@@ -84,7 +82,6 @@ router.post('/found', authenticate, async (req: Request, res: Response) => {
         },
       });
 
-      // Give founder all shares
       await tx.stockHolding.create({
         data: {
           userId,
@@ -105,7 +102,7 @@ router.post('/found', authenticate, async (req: Request, res: Response) => {
         name: result.companyName,
         totalShares: result.totalSharesIssued.toString(),
         pricePerShare,
-        foundingCost: result.foundingCost,
+        foundingCost: Number(result.foundingCost),
       },
     });
   } catch (error) {
@@ -130,7 +127,6 @@ router.get('/', async (_req: Request, res: Response) => {
       },
     });
 
-    // Calculate VWAP for each company in parallel
     const result = await Promise.all(
       companies.map(async (c) => {
         const currentPrice = await getVWAPPrice({
@@ -189,7 +185,6 @@ router.get('/:ticker', async (req: Request<{ ticker: string }>, res: Response) =
       return res.status(404).json({ error: 'Company not found' });
     }
 
-    // Use VWAP for current price
     const companySplitMultiplier = Number(company.splitMultiplier);
     const currentPrice = await getVWAPPrice({
       companyId: company.id,
@@ -200,9 +195,9 @@ router.get('/:ticker', async (req: Request<{ ticker: string }>, res: Response) =
 
     const lastTransaction = company.transactions[0];
 
-    // Calculate founding price (adjusted for splits)
+    // Founding price adjusted for splits, floored to cents
     const foundingPrice = company.foundingCost
-      ? Number(company.foundingCost) / (Number(company.totalSharesIssued) * companySplitMultiplier)
+      ? floorToCents(Number(company.foundingCost) / (Number(company.totalSharesIssued) * companySplitMultiplier))
       : null;
 
     return res.json({
@@ -216,7 +211,8 @@ router.get('/:ticker', async (req: Request<{ ticker: string }>, res: Response) =
       foundedBy: company.founder?.username || null,
       splitMultiplier: companySplitMultiplier,
       recentTransactions: company.transactions.map(t => ({
-        price: Number(t.pricePerShare) * (companySplitMultiplier / Number(t.splitMultiplier)),
+        // Adjust historical price to current split level, floored to cents
+        price: floorToCents(Number(t.pricePerShare) * (companySplitMultiplier / Number(t.splitMultiplier))),
         shares: t.sharesTraded.toString(),
         buyer: t.buyer.username,
         seller: t.seller.username,
@@ -239,7 +235,7 @@ router.get('/:ticker', async (req: Request<{ ticker: string }>, res: Response) =
 router.post('/:ticker/split', authenticate, async (req: Request<{ ticker: string }>, res: Response) => {
   try {
     const ticker = req.params.ticker.toUpperCase();
-    const userId = req.user!.userId; // Use authenticated user ID
+    const userId = req.user!.userId;
 
     const company = await prisma.company.findUnique({
       where: { tickerSymbol: ticker },
@@ -252,7 +248,6 @@ router.post('/:ticker/split', authenticate, async (req: Request<{ ticker: string
       return res.status(404).json({ error: 'Company not found' });
     }
 
-    // Check if user is majority shareholder (> 50% of shares)
     const userHolding = company.stockHoldings.find(h => h.userId === userId);
     if (!userHolding) {
       return res.status(403).json({ error: 'You do not own any shares of this company' });
@@ -268,8 +263,6 @@ router.post('/:ticker/split', authenticate, async (req: Request<{ ticker: string
       });
     }
 
-    // Check if stock price after split would be below minimum (0.01)
-    // A 2:1 split halves the price, so we need currentPrice > 0.02 to ensure post-split price > 0.01
     const currentPrice = await getVWAPPrice({
       companyId: company.id,
       foundingCost: company.foundingCost ? Number(company.foundingCost) : null,
@@ -277,22 +270,18 @@ router.post('/:ticker/split', authenticate, async (req: Request<{ ticker: string
       splitMultiplier: Number(company.splitMultiplier),
     });
 
-    const priceAfterSplit = currentPrice / 2;
+    // Floor the post-split price to see what buyers will actually pay after rounding
+    const priceAfterSplit = floorToCents(currentPrice / 2);
 
-    // Use epsilon to handle floating point precision issues
-    const MINIMUM_PRICE = 0.01;
-    const EPSILON = 0.0001;
-
-    if (priceAfterSplit < MINIMUM_PRICE + EPSILON) {
+    if (priceAfterSplit < 0.01) {
       logger.debug('Stock split blocked - price would be below minimum', { ticker, currentPrice, priceAfterSplit });
       return res.status(400).json({
-        error: `Cannot split stock.`,
+        error: `Cannot split stock. Post-split price ($${priceAfterSplit}) would be below the $0.01 minimum.`,
       });
     }
 
-    // Perform the split in a transaction
     const result = await prisma.$transaction(async (tx) => {
-      // Double all stockholdings for this company
+      // Double all stockholdings
       await tx.stockHolding.updateMany({
         where: { companyId: company.id },
         data: {
@@ -311,23 +300,22 @@ router.post('/:ticker/split', authenticate, async (req: Request<{ ticker: string
         },
       });
 
-      // Update open bids: double shares requested, halve price per share (total cost stays same)
-      await tx.bid.updateMany({
-        where: { companyId: company.id, status: 'open' },
-        data: {
-          sharesRequested: { multiply: 2 },
-          pricePerShare: { divide: 2 },
-        },
-      });
+      // Double shares on open bids; floor the halved price using TRUNC in SQL.
+      // totalCost on bids is intentionally unchanged (buyer reserves the same cash).
+      await tx.$executeRaw`
+        UPDATE bids
+        SET shares_requested = shares_requested * 2,
+            price_per_share  = TRUNC(price_per_share / 2, 2)
+        WHERE company_id = ${company.id} AND status = 'open'
+      `;
 
-      // Update open asks: double shares offered, halve price per share
-      await tx.ask.updateMany({
-        where: { companyId: company.id, status: 'open' },
-        data: {
-          sharesOffered: { multiply: 2 },
-          pricePerShare: { divide: 2 },
-        },
-      });
+      // Double shares on open asks; floor the halved price using TRUNC in SQL.
+      await tx.$executeRaw`
+        UPDATE asks
+        SET shares_offered = shares_offered * 2,
+            price_per_share = TRUNC(price_per_share / 2, 2)
+        WHERE company_id = ${company.id} AND status = 'open'
+      `;
 
       return updatedCompany;
     });

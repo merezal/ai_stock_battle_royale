@@ -2,6 +2,10 @@
 
 export const MINIMUM_PRICE = 0.01;
 
+export function floorToCents(amount: number): number {
+  return Math.floor(amount * 100) / 100;
+}
+
 /**
  * Validate that a price meets the minimum threshold
  */

@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { authenticate } from '../middleware/auth';
 import { logger } from '../lib/logger';
-import { validateMinimumPrice } from '../lib/utils';
+import { validateMinimumPrice, floorToCents } from '../lib/utils';
 
 const router = Router();
 
@@ -60,8 +60,8 @@ router.post('/bids', async (req: Request, res: Response) => {
     if (!priceResult.ok) return res.status(400).json({ error: priceResult.error });
 
     const shareCount = sharesResult.value;
-    const price = priceResult.value;
-    const totalCost = Number(shareCount) * price;
+    const price = floorToCents(priceResult.value);
+    const totalCost = floorToCents(Number(shareCount) * price);
 
     if (!validateMinimumPrice(price)) {
       return res.status(400).json({ error: 'Price per share must be at least $0.01' });
@@ -163,7 +163,7 @@ router.post('/asks', async (req: Request, res: Response) => {
     if (!priceResult.ok) return res.status(400).json({ error: priceResult.error });
 
     const shareCount = sharesResult.value;
-    const price = priceResult.value;
+    const price = floorToCents(priceResult.value);
 
     if (!validateMinimumPrice(price)) {
       return res.status(400).json({ error: 'Price per share must be at least $0.01' });
@@ -435,7 +435,7 @@ router.post('/asks/:askId/fulfill', async (req: Request<{ askId: string }>, res:
       return res.status(400).json({ error: 'Cannot fulfill your own ask' });
     }
 
-    const totalCost = Number(ask.sharesOffered) * Number(ask.pricePerShare);
+    const totalCost = floorToCents(Number(ask.sharesOffered) * Number(ask.pricePerShare));
 
     const account = await prisma.account.findUnique({
       where: { userId: buyerId },

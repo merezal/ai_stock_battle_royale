@@ -1,7 +1,7 @@
 import type { StockHolding } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { logger } from '../lib/logger';
-import { validateMinimumPrice } from '../lib/utils';
+import { validateMinimumPrice, floorToCents } from '../lib/utils';
 import { getVWAPPrice } from '../lib/pricing';
 
 // Tool definitions for MCP protocol
@@ -562,13 +562,14 @@ export async function executePlaceBid(userId: number, bids: Array<{ ticker: stri
       return { error: `Company '${bid.ticker}' not found` };
     }
 
-    const bidCost = bid.shares * bid.pricePerShare;
+    const pricePerShare = floorToCents(bid.pricePerShare);
+    const bidCost = floorToCents(bid.shares * pricePerShare);
     totalCost += bidCost;
 
     bidData.push({
       ticker: bid.ticker.toUpperCase(),
       shares: bid.shares,
-      pricePerShare: bid.pricePerShare,
+      pricePerShare,
       companyId: company.id,
       totalCost: bidCost,
     });
@@ -644,8 +645,9 @@ export async function executePlaceAsk(userId: number, asks: Array<{ ticker: stri
       return { error: `Shares and price must be positive. Got shares: ${ask.shares}, pricePerShare: ${ask.pricePerShare}` };
     }
 
-    if (!validateMinimumPrice(ask.pricePerShare)) {
-      return { error: `Price per share must be at least $0.01. Got: ${ask.pricePerShare}` };
+    const pricePerShare = floorToCents(ask.pricePerShare);
+    if (!validateMinimumPrice(pricePerShare)) {
+      return { error: `Price per share must be at least $0.01. Got: ${pricePerShare}` };
     }
 
     const company = await prisma.company.findUnique({
@@ -669,7 +671,7 @@ export async function executePlaceAsk(userId: number, asks: Array<{ ticker: stri
     askData.push({
       ticker: ask.ticker.toUpperCase(),
       shares: ask.shares,
-      pricePerShare: ask.pricePerShare,
+      pricePerShare,
       companyId: company.id,
       holding,
     });
@@ -974,8 +976,8 @@ export async function executeFulfillAsk(userId: number, askIds: number[]) {
     }
   }
 
-  // Calculate total cost
-  const totalCost = asks.reduce((sum, ask) => sum + Number(ask.sharesOffered) * Number(ask.pricePerShare), 0);
+  // Calculate total cost; floor each individual ask to avoid float drift
+  const totalCost = asks.reduce((sum, ask) => sum + floorToCents(Number(ask.sharesOffered) * Number(ask.pricePerShare)), 0);
 
   // Check if buyer has enough cash
   const account = await prisma.account.findUnique({
@@ -1031,8 +1033,8 @@ export async function executeFulfillAsk(userId: number, askIds: number[]) {
       const currentBuyerShares = buyerShareChanges.get(ask.companyId) || BigInt(0);
       buyerShareChanges.set(ask.companyId, currentBuyerShares + ask.sharesOffered);
 
-      // Track seller cash changes
-      const askCost = Number(ask.sharesOffered) * Number(ask.pricePerShare);
+      // Track seller cash changes; floor each individual cost to avoid float drift
+      const askCost = floorToCents(Number(ask.sharesOffered) * Number(ask.pricePerShare));
       const currentSellerCash = sellerCashChanges.get(ask.userId) || 0;
       sellerCashChanges.set(ask.userId, currentSellerCash + askCost);
     }
@@ -1102,7 +1104,7 @@ export async function executeFulfillAsk(userId: number, askIds: number[]) {
         select: { splitMultiplier: true },
       });
 
-      const askCost = Number(ask.sharesOffered) * Number(ask.pricePerShare);
+      const askCost = floorToCents(Number(ask.sharesOffered) * Number(ask.pricePerShare));
 
       const transaction = await tx.transaction.create({
         data: {
