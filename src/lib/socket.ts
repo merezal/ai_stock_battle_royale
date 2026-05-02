@@ -24,16 +24,21 @@ export function initSocketServer(httpServer: HttpServer<typeof IncomingMessage, 
     if (!payload) {
       return next(new Error('Invalid or expired token'));
     }
-    (socket.data as { userId: number; username: string }).userId = payload.userId;
-    (socket.data as { userId: number; username: string }).username = payload.username;
+    const data = socket.data as { userId: number; username: string; isAdmin: boolean };
+    data.userId = payload.userId;
+    data.username = payload.username;
+    data.isAdmin = payload.isAdmin ?? false;
     next();
   });
 
   io.on('connection', (socket) => {
-    const { userId, username } = socket.data as { userId: number; username: string };
-    logger.debug('Socket connected', { userId, username, socketId: socket.id });
+    const { userId, username, isAdmin } = socket.data as { userId: number; username: string; isAdmin: boolean };
+    logger.debug('Socket connected', { userId, username, isAdmin, socketId: socket.id });
 
     socket.join(`user:${userId}`);
+    if (isAdmin) {
+      socket.join('admin');
+    }
 
     socket.on('disconnect', (reason) => {
       logger.debug('Socket disconnected', { userId, username, reason });

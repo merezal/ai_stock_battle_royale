@@ -7,6 +7,7 @@ const SALT_ROUNDS = 10;
 export interface JWTPayload {
   userId: number;
   username: string;
+  isAdmin: boolean;
 }
 
 // Hash a password

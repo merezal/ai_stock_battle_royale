@@ -9,7 +9,7 @@ import {
   getExecutionState,
 } from '../services/bot-executor';
 import { toolDefinitions } from '../services/mcp-tools';
-import { authenticate } from '../middleware/auth';
+import { authenticate, requireAdmin } from '../middleware/auth';
 import { sanitizeString } from '../lib/utils';
 import { logger } from '../lib/logger';
 
@@ -189,7 +189,7 @@ router.get('/tools', async (_req: Request, res: Response) => {
 });
 
 // Admin: Start the bot execution loop
-router.post('/admin/start-loop', authenticate, async (_req: Request, res: Response) => {
+router.post('/admin/start-loop', authenticate, requireAdmin, async (_req: Request, res: Response) => {
   try {
     startBotExecutionLoop();
     return res.json({ success: true, message: 'Bot execution loop started' });
@@ -200,7 +200,7 @@ router.post('/admin/start-loop', authenticate, async (_req: Request, res: Respon
 });
 
 // Admin: Stop the bot execution loop
-router.post('/admin/stop-loop', authenticate, async (_req: Request, res: Response) => {
+router.post('/admin/stop-loop', authenticate, requireAdmin, async (_req: Request, res: Response) => {
   try {
     stopBotExecutionLoop();
     return res.json({ success: true, message: 'Bot execution loop stopped' });
@@ -211,7 +211,7 @@ router.post('/admin/stop-loop', authenticate, async (_req: Request, res: Respons
 });
 
 // Admin: Get loop status and execution state
-router.get('/admin/status', authenticate, async (_req: Request, res: Response) => {
+router.get('/admin/status', authenticate, requireAdmin, async (_req: Request, res: Response) => {
   try {
     const activePrompts = await prisma.llmPrompt.count({
       where: { isActive: true },
@@ -232,7 +232,7 @@ router.get('/admin/status', authenticate, async (_req: Request, res: Response) =
 });
 
 // Admin: Run all active bots once
-router.post('/admin/run-all', authenticate, async (_req: Request, res: Response) => {
+router.post('/admin/run-all', authenticate, requireAdmin, async (_req: Request, res: Response) => {
   try {
     const results = await executeAllActiveBots();
     return res.json({ success: true, results });
