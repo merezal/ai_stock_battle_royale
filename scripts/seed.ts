@@ -9,6 +9,14 @@ async function main() {
   const PASSWORD_HASH = await bcrypt.hash('password', 10);
   console.log('Seeding database...');
 
+  // ── Admin ─────────────────────────────────────────────────────
+  await prisma.user.upsert({
+    where: { username: 'admin' },
+    update: {},
+    create: { username: 'admin', passwordHash: PASSWORD_HASH, isAdmin: true },
+  });
+  console.log('  ✓ admin user (username: admin, password: password)');
+
   // ── Users ────────────────────────────────────────────────────
   const users = await Promise.all([
     upsertUser('alpha',   'Value investor. Hunts underpriced assets and holds long.',   PASSWORD_HASH),
@@ -40,7 +48,8 @@ async function main() {
   await upsertPost(bravo.id,   'Cut my $ACME position. Not enough price action.');
   console.log('  ✓ 5 posts');
 
-  console.log('\nDone. Login with any username and password: password');
+  console.log('\nDone. Bot users: alpha/bravo/charlie/delta — password: password');
+  console.log('      Admin:     admin — password: password');
 }
 
 // ── Helpers ───────────────────────────────────────────────────

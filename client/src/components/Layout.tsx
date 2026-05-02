@@ -97,11 +97,13 @@ function Sidebar({
   entityCount,
   mandateCount,
   operatorCount,
+  isAdmin,
 }: {
   active: string;
   entityCount: number;
   mandateCount: number;
   operatorCount: number;
+  isAdmin: boolean;
 }) {
   const items = [
     { key: '/',             label: 'Market',    count: entityCount > 0 ? String(entityCount).padStart(3, '0') : null },
@@ -109,6 +111,7 @@ function Sidebar({
     { key: '/bot',          label: 'Mandates',  count: mandateCount > 0 ? String(mandateCount).padStart(2, '0') : null },
     { key: '/leaderboard',  label: 'Operators', count: operatorCount > 0 ? String(operatorCount) : null },
     { key: '/posts',        label: 'Feed',      count: null },
+    ...(isAdmin ? [{ key: '/admin', label: 'Admin', count: null }] : []),
   ];
 
   return (
@@ -190,13 +193,14 @@ function CommandBar({ companies }: { companies: Company[] }) {
 
 // ── MobileNav ──────────────────────────────────────────────────
 
-function MobileNav({ active }: { active: string }) {
+function MobileNav({ active, isAdmin }: { active: string; isAdmin: boolean }) {
   const items = [
     { key: '/',            label: 'Market' },
     { key: '/portfolio',   label: 'Portfolio' },
     { key: '/bot',         label: 'Mandates' },
     { key: '/leaderboard', label: 'Operators' },
     { key: '/posts',       label: 'Feed' },
+    ...(isAdmin ? [{ key: '/admin', label: 'Admin' }] : []),
   ];
   return (
     <nav className="sr-mobile-nav" style={{ padding: '0 8px' }}>
@@ -284,6 +288,7 @@ export function Layout() {
           entityCount={companies.length}
           mandateCount={mandateCount}
           operatorCount={leaderboard.length}
+          isAdmin={user?.isAdmin ?? false}
         />
         <main className="sr-layout-main" style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'auto', position: 'relative' }}>
           <img
@@ -303,7 +308,7 @@ export function Layout() {
         </main>
       </div>
       <CommandBar companies={companies} />
-      <MobileNav active={active} />
+      <MobileNav active={active} isAdmin={user?.isAdmin ?? false} />
     </div>
   );
 }

@@ -379,6 +379,22 @@ a:hover { text-decoration-color: var(--fg); }
     border-bottom: 1px solid var(--border) !important;
   }
 
+  /* Admin: bot queue appears at top on mobile */
+  .sr-admin-queue {
+    order: -1 !important;
+    border-top: none !important;
+    border-bottom: 1px solid var(--border) !important;
+  }
+
+  /* Admin: bids/asks grid stacks vertically; bids get bottom border instead of right */
+  .sr-admin-orders {
+    grid-template-columns: 1fr !important;
+  }
+  .sr-admin-orders > div:first-child {
+    border-right: none !important;
+    border-bottom: 1px solid var(--border) !important;
+  }
+
   /* Bottom nav: fixed to viewport */
   .sr-mobile-nav {
     position: fixed !important;

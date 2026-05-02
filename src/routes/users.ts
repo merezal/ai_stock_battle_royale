@@ -94,11 +94,13 @@ router.post('/register', async (req: Request, res: Response) => {
     const token = generateToken({
       userId: user.id,
       username: user.username,
+      isAdmin: user.isAdmin,
     });
 
     return res.status(201).json({
       id: user.id,
       username: user.username,
+      isAdmin: user.isAdmin,
       token,
       cashBalance: Number(user.account?.cashBalance ?? 0),
       createdAt: user.createdAt,
@@ -140,11 +142,13 @@ router.post('/login', async (req: Request, res: Response) => {
     const token = generateToken({
       userId: user.id,
       username: user.username,
+      isAdmin: user.isAdmin,
     });
 
     return res.json({
       id: user.id,
       username: user.username,
+      isAdmin: user.isAdmin,
       token,
       cashBalance: Number(user.account?.cashBalance ?? 0),
     });
@@ -216,6 +220,7 @@ router.get('/:id', async (req: Request<{ id: string }>, res: Response) => {
     return res.json({
       id: user.id,
       username: user.username,
+      isAdmin: user.isAdmin,
       cashBalance,
       reservedCash,
       availableCash: cashBalance - reservedCash,
@@ -277,7 +282,7 @@ router.get('/:id/portfolio', async (req: Request<{ id: string }>, res: Response)
 router.get('/', async (_req: Request, res: Response) => {
   try {
     const users = await prisma.user.findMany({
-      where: { isActive: true },
+      where: { isActive: true, isAdmin: false },
       include: {
         account: true,
         stockHoldings: { include: { company: true } },

@@ -11,6 +11,7 @@ import { Bot } from './pages/Bot';
 import { Login } from './pages/Login';
 import { Landing } from './pages/Landing';
 import { Portfolio } from './pages/Portfolio';
+import { Admin } from './pages/Admin';
 
 function CompanyRedirect() {
   const { ticker } = useParams<{ ticker: string }>();
@@ -25,6 +26,12 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+function AdminRoute() {
+  const { user } = useCurrentUser();
+  if (!user?.isAdmin) return <Navigate to="/" replace />;
+  return <Admin />;
+}
 
 function AppRoutes() {
   const { userId } = useCurrentUser();
@@ -48,6 +55,7 @@ function AppRoutes() {
         <Route path="posts" element={<Posts />} />
         <Route path="portfolio" element={<Portfolio />} />
         <Route path="bot" element={<Bot />} />
+        <Route path="admin" element={<AdminRoute />} />
         <Route path="login" element={<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

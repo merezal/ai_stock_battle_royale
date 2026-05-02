@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useRef, type ReactNode } from 're
 import { useQueryClient } from '@tanstack/react-query';
 import { type Socket } from 'socket.io-client';
 import { createSocket, disconnectSocket } from '../lib/socket';
-import type { BotActivityLog, BotStatus } from '../api/client';
+import type { BotActivityLog, BotStatus, AdminLog } from '../api/client';
 
 interface SocketContextType {
   socket: Socket | null;
@@ -44,6 +44,7 @@ export function SocketProvider({
       if (ticker) {
         queryClient.invalidateQueries({ queryKey: ['orderbook', ticker] });
       }
+      queryClient.invalidateQueries({ queryKey: ['adminOrders'] });
     });
 
     socket.on('leaderboard:updated', () => {
@@ -84,6 +85,16 @@ export function SocketProvider({
         (prev) => {
           if (!prev) return [log];
           return [log, ...prev].slice(0, 40);
+        }
+      );
+    });
+
+    socket.on('admin:log', (log: AdminLog) => {
+      queryClient.setQueryData<AdminLog[]>(
+        ['adminLogs'],
+        (prev) => {
+          if (!prev) return [log];
+          return [log, ...prev].slice(0, 100);
         }
       );
     });

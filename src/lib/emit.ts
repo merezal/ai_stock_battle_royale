@@ -48,8 +48,9 @@ export function emitBotStatus(status: object) {
   emit('bot:status', status);
 }
 
-export function emitBotLog(userId: number, log: BotActivityLog) {
-  emitTo(`user:${userId}`, 'bot:log', log);
+export function emitBotLog(userId: number, username: string, log: BotActivityLog) {
+  emitTo(`user:${userId}`, 'bot:log', { ...log, userId });
+  emitTo('admin', 'admin:log', { ...log, userId, username });
 }
 
 export function emitBotPerspective(userId: number, username: string, perspective: string) {

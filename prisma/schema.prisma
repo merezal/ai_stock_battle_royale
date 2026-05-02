@@ -13,6 +13,7 @@ model User {
   passwordHash String   @map("password_hash") @db.VarChar(255)
   createdAt    DateTime @default(now()) @map("created_at")
   isActive     Boolean  @default(true) @map("is_active")
+  isAdmin      Boolean  @default(false) @map("is_admin")
 
   account        Account?
   foundedCompanies Company[]    @relation("FoundedCompanies")

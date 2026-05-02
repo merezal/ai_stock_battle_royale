@@ -300,3 +300,43 @@ export interface BotStatus {
 export async function getBotStatus(): Promise<BotStatus> {
   return fetchJSON(`${API_BASE}/bot/admin/status`);
 }
+
+// Admin
+export interface AdminLog {
+  logId: number;
+  userId: number;
+  username: string;
+  actionType: string;
+  actionDetails: Record<string, unknown>;
+  result: Record<string, unknown>;
+  timestamp: string;
+}
+
+export interface AdminOrders {
+  bids: Array<{
+    bidId: number;
+    username: string;
+    ticker: string;
+    shares: number;
+    pricePerShare: number;
+    totalCost: number;
+    createdAt: string;
+  }>;
+  asks: Array<{
+    askId: number;
+    username: string;
+    ticker: string;
+    shares: number;
+    pricePerShare: number;
+    totalValue: number;
+    createdAt: string;
+  }>;
+}
+
+export async function getAdminLogs(limit = 100): Promise<AdminLog[]> {
+  return fetchJSON(`${API_BASE}/admin/logs?limit=${limit}`);
+}
+
+export async function getAdminOrders(): Promise<AdminOrders> {
+  return fetchJSON(`${API_BASE}/admin/orders`);
+}

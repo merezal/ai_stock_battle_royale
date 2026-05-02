@@ -110,6 +110,7 @@ async function callOllama(messages: OllamaMessage[], tools: unknown[]): Promise<
 // Log bot activity
 async function logActivity(
   userId: number,
+  username: string,
   promptId: number | null,
   actionType: string,
   actionDetails: unknown,
@@ -125,13 +126,12 @@ async function logActivity(
     },
   });
 
-  // Debug log for assistant_message type
   if (actionType === 'assistant_message') {
     const contentLength = (result as { content?: string })?.content?.length || 0;
     logger.debug('Created assistant_message log', { logEntryId: logEntry.id, contentLength });
   }
 
-  emitBotLog(userId, {
+  emitBotLog(userId, username, {
     logId: logEntry.id,
     actionType: logEntry.actionType,
     actionDetails: logEntry.actionDetails as Record<string, unknown>,
@@ -198,7 +198,7 @@ async function forcePerspectiveUpdate(
         where: { id: promptId },
         data: { perspective: text.slice(0, 4000) },
       });
-      await logActivity(userId, promptId, 'perspective_updated', {}, { length: text.length });
+      await logActivity(userId, user?.username ?? '', promptId, 'perspective_updated', {}, { length: text.length });
       logger.debug('Perspective updated', { userId, length: text.length });
       if (user) {
         emitBotPerspective(userId, user.username, text.slice(0, 4000));
@@ -253,7 +253,7 @@ export async function executeBot(userId: number, promptId: number, promptText: s
         logger.debug('Bot thought process', { username: user.username, contentLength: assistantContent.length });
 
         // Log the message as an activity
-        await logActivity(userId, promptId, 'assistant_message', {}, {
+        await logActivity(userId, user.username, promptId, 'assistant_message', {}, {
           content: assistantContent,
           hasPending: !!response.message.tool_calls && response.message.tool_calls.length > 0,
         });
@@ -301,7 +301,7 @@ export async function executeBot(userId: number, promptId: number, promptText: s
         }
 
         // Log the activity
-        await logActivity(userId, promptId, name, args, result);
+        await logActivity(userId, user.username, promptId, name, args, result);
 
         // Feed tool result back to LLM for next iteration
         messages.push({
@@ -317,7 +317,7 @@ export async function executeBot(userId: number, promptId: number, promptText: s
     }
 
     // Log completion
-    await logActivity(userId, promptId, 'execution_complete', { toolCallCount }, {
+    await logActivity(userId, user.username, promptId, 'execution_complete', { toolCallCount }, {
       success: true,
       executionLog,
     });
@@ -326,7 +326,7 @@ export async function executeBot(userId: number, promptId: number, promptText: s
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
-    await logActivity(userId, promptId, 'execution_error', { toolCallCount }, {
+    await logActivity(userId, user.username, promptId, 'execution_error', { toolCallCount }, {
       success: false,
       error: errorMessage,
       executionLog,

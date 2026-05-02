@@ -30,6 +30,17 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+// Middleware that requires the authenticated user to have admin role
+export function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  if (!req.user.isAdmin) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  next();
+}
+
 // Middleware to check if authenticated user matches the userId in request
 export function authorizeUser(req: Request, res: Response, next: NextFunction) {
   if (!req.user) {
