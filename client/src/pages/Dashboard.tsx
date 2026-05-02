@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -212,8 +212,8 @@ function EntityPanel({ company, onDeselect }: { company: Company; onDeselect: ()
     onError: (err: Error) => setOrderError(err.message),
   });
 
-  const cancelBidMutation = useMutation({ mutationFn: (id: number) => cancelBid(id), onSuccess: invalidate });
-  const cancelAskMutation = useMutation({ mutationFn: (id: number) => cancelAsk(id), onSuccess: invalidate });
+  const cancelBidMutation = useMutation({ mutationFn: (id: number) => cancelBid(id), onSuccess: invalidate, onError: (err: Error) => setOrderError(err.message) });
+  const cancelAskMutation = useMutation({ mutationFn: (id: number) => cancelAsk(id), onSuccess: invalidate, onError: (err: Error) => setOrderError(err.message) });
 
   const handleOrder = () => {
     if (!userId) { setOrderError('Not authenticated.'); return; }
@@ -229,7 +229,7 @@ function EntityPanel({ company, onDeselect }: { company: Company; onDeselect: ()
   const topAsks = (orderBook?.asks ?? []).slice(0, 3);
 
   return (
-    <aside className="sr-panel-right" style={{
+    <aside className="sr-panel-right sr-entity-panel" style={{
       width: 380, flexShrink: 0,
       borderLeft: '1px solid var(--border)',
       display: 'flex', flexDirection: 'column',
@@ -238,9 +238,15 @@ function EntityPanel({ company, onDeselect }: { company: Company; onDeselect: ()
     }}>
       {/* Header */}
       <div style={{ padding: 16, borderBottom: '1px solid var(--border)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span className="t-mark" style={{ fontSize: 16 }}>{company.ticker}</span>
-          <button onClick={onDeselect} style={{ background: 0, border: 0, color: 'var(--fg-subtle)', cursor: 'pointer', fontSize: 12 }}>✕</button>
+          <button onClick={onDeselect} style={{
+            background: 'transparent', border: '1px solid var(--border-strong)',
+            color: 'var(--fg)', cursor: 'pointer',
+            fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 600,
+            width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            flexShrink: 0,
+          }}>✕</button>
         </div>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 32, marginTop: 12, fontVariantNumeric: 'tabular-nums' }}>
           {fmt(company.currentPrice)}
@@ -526,10 +532,15 @@ export function Dashboard() {
 
   const selectedCompany = companies.find(c => c.ticker === selected) ?? null;
 
+  // On mobile the entity panel appears above the list — scroll to top so it's immediately visible
+  useEffect(() => {
+    if (selected && window.innerWidth < 768) window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [selected]);
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+    <div className="sr-page" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       {/* Sub-header */}
-      <div style={{
+      <div className="sr-subheader" style={{
         display: 'flex', alignItems: 'center',
         padding: '10px 16px',
         borderBottom: '1px solid var(--border)',
@@ -540,7 +551,7 @@ export function Dashboard() {
         <span style={{ color: 'var(--fg-muted)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
           {isLoading ? '...' : `${companies.length} entities`}
         </span>
-        <span style={{ flex: 1 }} />
+        <span className="sr-spacer" style={{ flex: 1 }} />
 
         {userId && (
           <button
@@ -581,7 +592,7 @@ export function Dashboard() {
         ) : (
           <>
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-              <div style={{ flex: 1, overflow: 'auto' }}>
+              <div className="sr-scroll-jail" style={{ flex: 1, overflow: 'auto' }}>
                 <MarketTable companies={companies} selected={selected} onSelect={handleSelect} />
               </div>
               {/* Top Movers */}

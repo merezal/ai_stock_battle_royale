@@ -1,6 +1,6 @@
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { getPortfolioByUsername, getTransactions, getPortfolioHistory } from '../api/client';
+import { getPortfolioByUsername, getTransactions, getPortfolioHistory, getOrderBook } from '../api/client';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { fmt, STARTING_CAPITAL } from '../utils/format';
 import type { Transaction } from '../types';
@@ -40,6 +40,15 @@ export function UserProfile() {
     enabled: !!username,
   });
 
+  const { data: orderBook } = useQuery({
+    queryKey: ['orderbook', 'userProfile', username],
+    queryFn: () => getOrderBook(undefined),
+    enabled: !!username,
+  });
+
+  const userBids = (orderBook?.bids ?? []).filter(b => b.username === username);
+  const userAsks = (orderBook?.asks ?? []).filter(a => a.username === username);
+
   if (isLoading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--fg-muted)' }}>
@@ -75,9 +84,9 @@ export function UserProfile() {
   const histPoints = history.slice(-20).map(h => h.value);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div className="sr-page" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Sub-header */}
-      <div style={{
+      <div className="sr-subheader" style={{
         display: 'flex', alignItems: 'center', padding: '10px 16px',
         borderBottom: '1px solid var(--border)', gap: 16, flexShrink: 0,
       }}>
@@ -104,7 +113,7 @@ export function UserProfile() {
 
       <div className="sr-content-row" style={{ flex: 1, display: 'flex', minHeight: 0 }}>
         {/* Main */}
-        <div style={{ flex: 1, overflow: 'auto' }}>
+        <div className="sr-scroll-jail" style={{ flex: 1, overflow: 'auto' }}>
           {/* Stats */}
           <div className="sr-stats-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)' }}>
             <Stat label="Total value" value={fmt(portfolio.totalValue)} highlight />
@@ -122,7 +131,7 @@ export function UserProfile() {
           )}
 
           {/* Holdings */}
-          <div style={{ borderBottom: '1px solid var(--border)' }}>
+          <div>
             <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)' }}>
               <span className="t-label">Holdings / {portfolio.holdings.length}</span>
             </div>
@@ -134,7 +143,7 @@ export function UserProfile() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-mono)', fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
                 <thead>
                   <tr>
-                    {['Entity', 'Name', 'Shares', 'VWAP', 'Value'].map((h, i) => (
+                    {['Entity', 'Name', 'Shares', 'Ownership', 'VWAP', 'Value'].map((h, i) => (
                       <th key={h} style={{
                         padding: '8px 12px', textAlign: i <= 1 ? 'left' : 'right',
                         borderBottom: '1px solid var(--border)',
@@ -156,11 +165,67 @@ export function UserProfile() {
                         {h.reservedShares > 0 && <span style={{ color: 'var(--fg-subtle)', marginLeft: 6 }}>({h.reservedShares} rsv)</span>}
                       </td>
                       <td style={{ padding: '8px 12px', textAlign: 'right', borderBottom: '1px solid var(--border)', color: 'var(--fg-muted)' }}>
+                        {h.totalSharesIssued ? ((h.sharesOwned / h.totalSharesIssued) * 100).toFixed(2) + '%' : '—'}
+                      </td>
+                      <td style={{ padding: '8px 12px', textAlign: 'right', borderBottom: '1px solid var(--border)', color: 'var(--fg-muted)' }}>
                         {h.currentPrice != null ? fmt(h.currentPrice) : '—'}
                       </td>
                       <td style={{ padding: '8px 12px', textAlign: 'right', borderBottom: '1px solid var(--border)' }}>
                         {h.positionValue != null ? fmt(h.positionValue) : '—'}
                       </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {/* Open Orders */}
+          <div style={{ borderTop: '1px solid var(--border)' }}>
+            <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)' }}>
+              <span className="t-label">Open orders / {userBids.length + userAsks.length}</span>
+            </div>
+            {userBids.length === 0 && userAsks.length === 0 ? (
+              <div style={{ padding: 16, fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--fg-subtle)' }}>
+                ∅ No open orders.
+              </div>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-mono)', fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
+                <thead>
+                  <tr>
+                    {['Type', 'Entity', 'Shares', 'Price', 'Total', 'Placed'].map((h, i) => (
+                      <th key={h} style={{
+                        padding: '8px 12px', textAlign: i <= 1 ? 'left' : 'right',
+                        borderBottom: '1px solid var(--border)',
+                        fontFamily: 'var(--font-display)', fontSize: 10, fontWeight: 500,
+                        letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-muted)',
+                      }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {userBids.map(b => (
+                    <tr key={b.bidId} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '8px 12px', fontFamily: 'var(--font-display)', fontSize: 10, fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg)' }}>▲ Bid</td>
+                      <td style={{ padding: '8px 12px' }}>
+                        <Link to={`/?entity=${b.ticker}`} style={{ color: 'var(--fg)', textDecoration: 'none' }}>{b.ticker}</Link>
+                      </td>
+                      <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--fg-muted)' }}>{b.shares}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--fg-muted)' }}>{fmt(b.pricePerShare)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'right' }}>{fmt(b.totalCost)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--fg-subtle)' }}>{new Date(b.createdAt).toLocaleString()}</td>
+                    </tr>
+                  ))}
+                  {userAsks.map(a => (
+                    <tr key={a.askId} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '8px 12px', fontFamily: 'var(--font-display)', fontSize: 10, fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--state-loss)' }}>▼ Ask</td>
+                      <td style={{ padding: '8px 12px' }}>
+                        <Link to={`/?entity=${a.ticker}`} style={{ color: 'var(--fg)', textDecoration: 'none' }}>{a.ticker}</Link>
+                      </td>
+                      <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--fg-muted)' }}>{a.shares}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--fg-muted)' }}>{fmt(a.pricePerShare)}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--fg-subtle)' }}>—</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--fg-subtle)' }}>{new Date(a.createdAt).toLocaleString()}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -174,7 +239,7 @@ export function UserProfile() {
           <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)' }}>
             <span className="t-label">Transaction log / {transactions.length}</span>
           </div>
-          <div style={{ flex: 1, overflow: 'auto' }}>
+          <div className="sr-scroll-jail" style={{ flex: 1, overflow: 'auto' }}>
             {transactions.length === 0 ? (
               <div style={{ padding: 16, fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--fg-subtle)' }}>∅ No transactions.</div>
             ) : (

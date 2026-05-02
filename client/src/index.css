@@ -307,24 +307,94 @@ a:hover { text-decoration-color: var(--fg); }
   .sr-topbar-operator { display: none !important; }
   .sr-topbar-clock    { display: none !important; }
 
-  /* Terminal: content row → column (panels stack below) */
-  .sr-content-row { flex-direction: column !important; overflow-y: auto !important; }
+  /* Layout root: un-jail the viewport, let body scroll */
+  .sr-layout-root {
+    height: auto !important;
+    min-height: 100dvh !important;
+    overflow: visible !important;
+    padding-bottom: 52px !important; /* clear fixed mobile nav */
+    width: 100% !important;
+    max-width: 100vw !important;
+    box-sizing: border-box !important;
+  }
+  /* All flex containers must be allowed to shrink below content width */
+  .sr-layout-body  { flex: 1 0 auto !important; min-width: 0 !important; }
+  .sr-layout-main  { overflow: visible !important; flex: 1 0 auto !important; min-width: 0 !important; max-width: 100% !important; box-sizing: border-box !important; }
+  .sr-layout-inner { min-height: auto !important; flex: none !important; min-width: 0 !important; max-width: 100% !important; }
 
-  /* Terminal: right panels become full-width */
+  /* Pages: natural height, constrained width, long words wrap */
+  .sr-page {
+    height: auto !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    word-break: break-word !important;
+    overflow-wrap: break-word !important;
+  }
+
+  /* Terminal: content row → column, no internal scroll */
+  .sr-content-row { flex-direction: column !important; overflow: visible !important; flex: none !important; min-width: 0 !important; }
+
+  /* Terminal: right panels become full-width, natural height */
   .sr-panel-right {
     width: 100% !important;
     min-width: 0 !important;
     flex-shrink: 0 !important;
     border-left: none !important;
     border-top: 1px solid var(--border);
-    max-height: 420px;
+    max-height: none !important;
+    box-sizing: border-box !important;
   }
+
+  /* Scroll jails: release to natural height, constrain width */
+  .sr-scroll-jail { overflow: visible !important; flex: 1 0 auto !important; max-height: none !important; min-width: 0 !important; max-width: 100% !important; }
 
   /* Terminal: 4-col stats → 2-col */
   .sr-stats-4 { grid-template-columns: repeat(2, 1fr) !important; }
 
-  /* Terminal: table horizontal scroll */
-  .sr-table-wrap { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+  /* Sub-headers: wrap gracefully, titles never break mid-word */
+  .sr-subheader { flex-wrap: wrap !important; row-gap: 6px !important; }
+  .sr-spacer { display: none !important; }
+  .t-mark { white-space: nowrap !important; }
+
+  /* Terminal: every table is its own scroll container; cells never break mid-number */
+  .sr-table-wrap { overflow-x: auto !important; -webkit-overflow-scrolling: touch; max-width: 100% !important; }
+  .sr-page table { display: block !important; overflow-x: auto !important; -webkit-overflow-scrolling: touch !important; }
+  .sr-page td, .sr-page th { white-space: nowrap !important; }
+
+  /* Market: entity panel appears above companies list when selected */
+  .sr-entity-panel { order: -1 !important; border-left: none !important; border-bottom: 1px solid var(--border) !important; }
+
+  /* Pre/code blocks wrap instead of overflow */
+  .sr-page pre, .sr-page code {
+    white-space: pre-wrap !important;
+    word-break: break-word !important;
+    overflow-wrap: break-word !important;
+    max-width: 100% !important;
+  }
+
+  /* Feed: compose panel appears above post list */
+  .sr-compose-first {
+    order: -1 !important;
+    border-top: none !important;
+    border-bottom: 1px solid var(--border) !important;
+  }
+
+  /* Bottom nav: fixed to viewport */
+  .sr-mobile-nav {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 100 !important;
+  }
+
+  /* Background stamp: fixed to viewport center */
+  .sr-bg-stamp {
+    position: fixed !important;
+    top: 50vh !important;
+    left: 50vw !important;
+    transform: translate(-50%, -50%) !important;
+  }
 }
 
 @media (max-width: 479px) {

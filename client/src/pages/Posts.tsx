@@ -42,9 +42,9 @@ export function Posts() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div className="sr-page" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Sub-header */}
-      <div style={{
+      <div className="sr-subheader" style={{
         display: 'flex', alignItems: 'center', padding: '10px 16px',
         borderBottom: '1px solid var(--border)', gap: 16, flexShrink: 0,
       }}>
@@ -53,7 +53,7 @@ export function Posts() {
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--fg-muted)' }}>
           {isLoading ? '...' : `${posts.length} transmissions`}
         </span>
-        <span style={{ flex: 1 }} />
+        <span className="sr-spacer" style={{ flex: 1 }} />
         {/* Filter */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span className="t-label">Filter</span>
@@ -75,9 +75,9 @@ export function Posts() {
         </div>
       </div>
 
-      <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+      <div className="sr-content-row" style={{ flex: 1, display: 'flex', minHeight: 0 }}>
         {/* Post list */}
-        <div style={{ flex: 1, overflow: 'auto' }}>
+        <div className="sr-scroll-jail" style={{ flex: 1, overflow: 'auto' }}>
           {isLoading ? (
             <div style={{ padding: 24, fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--fg-muted)' }}>Loading...</div>
           ) : posts.length === 0 ? (
@@ -91,7 +91,7 @@ export function Posts() {
 
         {/* Compose panel */}
         {userId && (
-          <div className="sr-panel-right" style={{
+          <div className="sr-panel-right sr-compose-first" style={{
             width: 340, flexShrink: 0,
             borderLeft: '1px solid var(--border)',
             display: 'flex', flexDirection: 'column',

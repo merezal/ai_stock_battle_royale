@@ -41,6 +41,7 @@ async function calcHoldings(rawHoldings: StockHoldingWithCompany[]) {
         sharesOwned: Number(h.sharesOwned),
         reservedShares: Number(h.reservedShares),
         availableShares: Number(h.sharesOwned) - Number(h.reservedShares),
+        totalSharesIssued: Number(h.company.totalSharesIssued),
         currentPrice,
         positionValue,
       };

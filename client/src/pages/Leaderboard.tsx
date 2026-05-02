@@ -15,9 +15,9 @@ export function Leaderboard() {
   const cols = ['Rank', 'Handle', 'Cash', 'Portfolio', 'Total'];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div className="sr-page" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Sub-header */}
-      <div style={{
+      <div className="sr-subheader" style={{
         display: 'flex', alignItems: 'center', padding: '10px 16px',
         borderBottom: '1px solid var(--border)', gap: 16, flexShrink: 0,
       }}>
@@ -29,7 +29,7 @@ export function Leaderboard() {
       </div>
 
       {/* Table */}
-      <div className="sr-table-wrap" style={{ flex: 1, overflow: 'auto' }}>
+      <div className="sr-table-wrap sr-scroll-jail" style={{ flex: 1, overflow: 'auto' }}>
         {isLoading ? (
           <div style={{ padding: 24, fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--fg-muted)' }}>
             Loading...
