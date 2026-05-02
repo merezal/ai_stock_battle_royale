@@ -1,5 +1,7 @@
+import http from 'http';
 import app from './app';
 import { startBotExecutionLoop } from './services/bot-executor';
+import { initSocketServer } from './lib/socket';
 import { logger } from './lib/logger';
 import { prisma } from './lib/prisma';
 
@@ -31,7 +33,10 @@ async function main() {
 
   const port = parseInt(process.env.PORT || '3000', 10);
 
-  app.listen(port, () => {
+  const httpServer = http.createServer(app);
+  initSocketServer(httpServer);
+
+  httpServer.listen(port, () => {
     logger.info(`Server running on port ${port}`);
     startBotExecutionLoop();
   });

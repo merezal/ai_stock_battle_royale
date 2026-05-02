@@ -3,6 +3,13 @@ import { prisma } from '../lib/prisma';
 import { authenticate } from '../middleware/auth';
 import { logger } from '../lib/logger';
 import { validateMinimumPrice, floorToCents } from '../lib/utils';
+import {
+  emitOrderbookUpdated,
+  emitPortfolioUpdated,
+  emitCompaniesUpdated,
+  emitLeaderboardUpdated,
+  emitTransactionsNew,
+} from '../lib/emit';
 
 const router = Router();
 
@@ -132,6 +139,9 @@ router.post('/bids', async (req: Request, res: Response) => {
       });
     });
 
+    emitOrderbookUpdated(ticker.toUpperCase());
+    emitPortfolioUpdated(userId, user.username);
+
     return res.status(201).json({
       success: true,
       bidId: bid.id,
@@ -256,6 +266,9 @@ router.post('/asks', async (req: Request, res: Response) => {
         },
       });
     });
+
+    emitOrderbookUpdated(ticker.toUpperCase());
+    emitPortfolioUpdated(userId, user.username);
 
     return res.status(201).json({
       success: true,
@@ -397,6 +410,14 @@ router.post('/bids/:bidId/fulfill', async (req: Request<{ bidId: string }>, res:
       });
     });
 
+    const ticker = bid.company.tickerSymbol;
+    emitOrderbookUpdated(ticker);
+    emitCompaniesUpdated();
+    emitTransactionsNew(ticker);
+    emitPortfolioUpdated(sellerId, req.user!.username);
+    emitPortfolioUpdated(bid.userId, transaction.buyer.username);
+    emitLeaderboardUpdated();
+
     return res.json({
       success: true,
       transactionId: transaction.id,
@@ -537,6 +558,14 @@ router.post('/asks/:askId/fulfill', async (req: Request<{ askId: string }>, res:
       });
     });
 
+    const ticker = ask.company.tickerSymbol;
+    emitOrderbookUpdated(ticker);
+    emitCompaniesUpdated();
+    emitTransactionsNew(ticker);
+    emitPortfolioUpdated(buyerId, req.user!.username);
+    emitPortfolioUpdated(ask.userId, transaction.seller.username);
+    emitLeaderboardUpdated();
+
     return res.json({
       success: true,
       transactionId: transaction.id,
@@ -591,6 +620,9 @@ router.post('/bids/:bidId/cancel', async (req: Request<{ bidId: string }>, res: 
     const account = await prisma.account.findUnique({
       where: { userId },
     });
+
+    emitOrderbookUpdated();
+    emitPortfolioUpdated(userId, req.user!.username);
 
     return res.json({
       success: true,
@@ -655,6 +687,9 @@ router.post('/asks/:askId/cancel', async (req: Request<{ askId: string }>, res: 
         },
       },
     });
+
+    emitOrderbookUpdated();
+    emitPortfolioUpdated(userId, req.user!.username);
 
     return res.json({
       success: true,

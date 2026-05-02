@@ -16,7 +16,6 @@ export function Posts() {
   const { data: posts = [], isLoading } = useQuery<Post[]>({
     queryKey: ['posts', filterTicker],
     queryFn: () => getPosts(filterTicker || undefined),
-    refetchInterval: 10000,
   });
 
   const { data: companies = [] } = useQuery({

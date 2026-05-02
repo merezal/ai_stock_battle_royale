@@ -10,7 +10,6 @@ export function Leaderboard() {
   const { data: leaderboard = [], isLoading } = useQuery({
     queryKey: ['leaderboard'],
     queryFn: getLeaderboard,
-    refetchInterval: 10000,
   });
 
   const cols = ['Rank', 'Handle', 'Cash', 'Portfolio', 'Total'];

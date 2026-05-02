@@ -231,13 +231,11 @@ export function Layout() {
   const { data: companies = [] } = useQuery<Company[]>({
     queryKey: ['companies'],
     queryFn: getCompanies,
-    refetchInterval: 15000,
   });
 
   const { data: botStatus } = useQuery<BotStatus>({
     queryKey: ['botStatus'],
     queryFn: getBotStatus,
-    refetchInterval: 5000,
   });
 
   const { data: botPrompt } = useQuery({

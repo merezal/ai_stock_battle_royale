@@ -1,6 +1,15 @@
 import { prisma } from '../lib/prisma';
 import { toolDefinitions, executeTool } from './mcp-tools';
 import { logger } from '../lib/logger';
+import {
+  emitBotStatus,
+  emitBotLog,
+  emitBotPerspective,
+  emitCompaniesUpdated,
+  emitOrderbookUpdated,
+  emitLeaderboardUpdated,
+  emitPortfolioUpdated,
+} from '../lib/emit';
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3.2';
@@ -117,6 +126,14 @@ async function logActivity(
     const contentLength = (result as { content?: string })?.content?.length || 0;
     logger.debug('Created assistant_message log', { logEntryId: logEntry.id, contentLength });
   }
+
+  emitBotLog(userId, {
+    logId: logEntry.id,
+    actionType: logEntry.actionType,
+    actionDetails: logEntry.actionDetails as Record<string, unknown>,
+    result: logEntry.result as Record<string, unknown>,
+    timestamp: logEntry.timestamp.toISOString(),
+  });
 }
 
 // Force a perspective update at the end of every turn.
@@ -172,12 +189,16 @@ async function forcePerspectiveUpdate(
     const response = await callOllama(messages, []);
     const text = (response.message.content || '').trim();
     if (text.length > 0) {
+      const user = await prisma.user.findUnique({ where: { id: userId }, select: { username: true } });
       await prisma.llmPrompt.update({
         where: { id: promptId },
         data: { perspective: text.slice(0, 4000) },
       });
       await logActivity(userId, promptId, 'perspective_updated', {}, { length: text.length });
       logger.debug('Perspective updated', { userId, length: text.length });
+      if (user) {
+        emitBotPerspective(userId, user.username, text.slice(0, 4000));
+      }
     }
   } catch (error) {
     // Non-fatal — perspective update failure should never crash the bot turn
@@ -366,6 +387,7 @@ export async function executeAllActiveBots() {
     promptId: prompt.id,
     promptText: prompt.promptText,
   }));
+  emitBotStatus(getExecutionState());
 
   const results: Array<{
     userId: number;
@@ -378,6 +400,7 @@ export async function executeAllActiveBots() {
   while (executionState.queue.length > 0) {
     const bot = executionState.queue.shift()!;
     executionState.currentBot = bot;
+    emitBotStatus(getExecutionState());
 
     logger.debug('Starting bot execution', { username: bot.username });
 
@@ -399,12 +422,19 @@ export async function executeAllActiveBots() {
       });
     }
 
+    // After each bot turn, push market-wide invalidations so all clients refresh
+    emitCompaniesUpdated();
+    emitOrderbookUpdated();
+    emitLeaderboardUpdated();
+    emitPortfolioUpdated(bot.userId, bot.username);
+
     logger.debug('Finished bot execution', { username: bot.username });
   }
 
   executionState.currentBot = null;
   executionState.isExecuting = false;
   executionState.lastCycleEnd = new Date();
+  emitBotStatus(getExecutionState());
 
   return results;
 }

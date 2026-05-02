@@ -1,0 +1,111 @@
+import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { type Socket } from 'socket.io-client';
+import { createSocket, disconnectSocket } from '../lib/socket';
+import type { BotActivityLog, BotStatus } from '../api/client';
+
+interface SocketContextType {
+  socket: Socket | null;
+}
+
+const SocketContext = createContext<SocketContextType>({ socket: null });
+
+export function SocketProvider({
+  userId,
+  children,
+}: {
+  userId: number | null;
+  children: ReactNode;
+}) {
+  const queryClient = useQueryClient();
+  const socketRef = useRef<Socket | null>(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!userId || !token) {
+      disconnectSocket();
+      socketRef.current = null;
+      return;
+    }
+
+    const socket = createSocket(token);
+    socketRef.current = socket;
+
+    // ── Invalidation events ────────────────────────────────────
+
+    socket.on('companies:updated', () => {
+      queryClient.invalidateQueries({ queryKey: ['companies'] });
+      // Also invalidate any open company detail query
+      queryClient.invalidateQueries({ queryKey: ['company'] });
+    });
+
+    socket.on('orderbook:updated', ({ ticker }: { ticker?: string }) => {
+      queryClient.invalidateQueries({ queryKey: ['orderbook'] });
+      if (ticker) {
+        queryClient.invalidateQueries({ queryKey: ['orderbook', ticker] });
+      }
+    });
+
+    socket.on('leaderboard:updated', () => {
+      queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+    });
+
+    socket.on('portfolio:updated', ({ userId: uid, username }: { userId: number; username: string }) => {
+      queryClient.invalidateQueries({ queryKey: ['portfolio', uid] });
+      queryClient.invalidateQueries({ queryKey: ['portfolio', 'username', username] });
+      // Also refresh the user object (cashBalance etc.)
+      queryClient.invalidateQueries({ queryKey: ['user', uid] });
+    });
+
+    socket.on('transactions:new', ({ ticker }: { ticker: string }) => {
+      queryClient.invalidateQueries({ queryKey: ['transactions', ticker] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+    });
+
+    socket.on('posts:updated', () => {
+      queryClient.invalidateQueries({ queryKey: ['posts'] });
+    });
+
+    // ── Full-payload pushes ────────────────────────────────────
+
+    socket.on('bot:status', (status: BotStatus) => {
+      queryClient.setQueryData(['botStatus'], status);
+    });
+
+    socket.on('bot:log', (log: BotActivityLog) => {
+      queryClient.setQueryData<BotActivityLog[]>(
+        ['botLogs', userId],
+        (prev) => {
+          if (!prev) return [log];
+          // Prepend new log, keep at most 40 entries to match the fetch limit
+          return [log, ...prev].slice(0, 40);
+        }
+      );
+    });
+
+    socket.on('bot:perspective', ({ userId: uid, username, perspective }: { userId: number; username: string; perspective: string }) => {
+      // Update the perspective field in the cached botPrompt for any user
+      queryClient.setQueryData<{ promptId: number | null; promptText: string; perspective: string | null; isActive: boolean; version: number; lastModified?: string }>(
+        ['botPrompt', uid],
+        (prev) => prev ? { ...prev, perspective } : prev
+      );
+      // Also invalidate portfolio-history since perspective implies a completed turn
+      queryClient.invalidateQueries({ queryKey: ['portfolio-history', username] });
+    });
+
+    return () => {
+      disconnectSocket();
+      socketRef.current = null;
+    };
+  }, [userId, queryClient]);
+
+  return (
+    <SocketContext.Provider value={{ socket: socketRef.current }}>
+      {children}
+    </SocketContext.Provider>
+  );
+}
+
+export function useSocket() {
+  return useContext(SocketContext);
+}

@@ -257,7 +257,6 @@ export function Bot() {
     queryKey: ['botPrompt', user?.id],
     queryFn: getBotPrompt,
     enabled: !!user?.id,
-    refetchInterval: 15000,
   });
 
   useEffect(() => {
@@ -275,14 +274,12 @@ export function Bot() {
   const { data: botStatus } = useQuery<BotStatus>({
     queryKey: ['botStatus'],
     queryFn: getBotStatus,
-    refetchInterval: 3000,
   });
 
   const { data: logs = [], isLoading: logsLoading } = useQuery<BotActivityLog[]>({
     queryKey: ['botLogs', user?.id],
     queryFn: () => getBotLogs(40),
     enabled: !!user?.id,
-    refetchInterval: 10000,
   });
 
   const saveMutation = useMutation({

@@ -166,13 +166,11 @@ function EntityPanel({ company, onDeselect }: { company: Company; onDeselect: ()
   const { data: orderBook } = useQuery({
     queryKey: ['orderbook', company.ticker],
     queryFn: () => getOrderBook(company.ticker),
-    refetchInterval: 5000,
   });
 
   const { data: txns = [] } = useQuery<Transaction[]>({
     queryKey: ['transactions', company.ticker],
     queryFn: () => getTransactions(company.ticker, undefined, 20),
-    refetchInterval: 15000,
   });
 
   const { data: portfolio } = useQuery({
@@ -515,7 +513,6 @@ export function Dashboard() {
   const { data: companies = [], isLoading } = useQuery<Company[]>({
     queryKey: ['companies'],
     queryFn: getCompanies,
-    refetchInterval: 10000,
   });
 
   const selectedCompany = companies.find(c => c.ticker === selected) ?? null;

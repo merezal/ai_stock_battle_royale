@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma';
 import { authenticate } from '../middleware/auth';
 import { sanitizeString } from '../lib/utils';
 import { logger } from '../lib/logger';
+import { emitPostsUpdated } from '../lib/emit';
 
 const router = Router();
 
@@ -44,6 +45,8 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
         mentionedCompany: { select: { tickerSymbol: true } },
       },
     });
+
+    emitPostsUpdated();
 
     return res.status(201).json({
       postId: post.id,
@@ -167,6 +170,8 @@ router.delete('/:postId', authenticate, async (req: Request<{ postId: string }>,
     await prisma.post.delete({
       where: { id: postId },
     });
+
+    emitPostsUpdated();
 
     return res.json({ success: true });
   } catch (error) {

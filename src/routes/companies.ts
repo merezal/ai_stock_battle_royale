@@ -5,6 +5,7 @@ import { authenticate } from '../middleware/auth';
 import { sanitizeString, validateTicker, validateMinimumPrice, floorToCents } from '../lib/utils';
 import { getVWAPPrice } from '../lib/pricing';
 import { logger } from '../lib/logger';
+import { emitCompaniesUpdated, emitOrderbookUpdated, emitLeaderboardUpdated, emitPortfolioUpdated } from '../lib/emit';
 
 const router = Router();
 
@@ -93,6 +94,10 @@ router.post('/found', authenticate, async (req: Request, res: Response) => {
 
       return company;
     });
+
+    emitCompaniesUpdated();
+    emitLeaderboardUpdated();
+    emitPortfolioUpdated(userId, req.user!.username);
 
     return res.status(201).json({
       success: true,
@@ -319,6 +324,9 @@ router.post('/:ticker/split', authenticate, async (req: Request<{ ticker: string
 
       return updatedCompany;
     });
+
+    emitCompaniesUpdated();
+    emitOrderbookUpdated(ticker);
 
     return res.json({
       success: true,

@@ -18,7 +18,6 @@ export function Companies() {
   const { data: companies, isLoading } = useQuery({
     queryKey: ['companies'],
     queryFn: getCompanies,
-    refetchInterval: 10000,
   });
 
   const foundMutation = useMutation({

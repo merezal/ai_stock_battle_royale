@@ -32,27 +32,23 @@ export function Portfolio() {
     queryKey: ['portfolio', userId],
     queryFn: () => getPortfolio(userId!),
     enabled: userId !== null,
-    refetchInterval: 15000,
   });
 
   const { data: history = [] } = useQuery({
     queryKey: ['portfolioHistory', user?.username],
     queryFn: () => getPortfolioHistory(user!.username),
     enabled: !!user?.username,
-    refetchInterval: 60000,
   });
 
   const { data: orderBook } = useQuery({
     queryKey: ['orderbook', 'all'],
     queryFn: () => getOrderBook(undefined),
-    refetchInterval: 5000,
   });
 
   const { data: transactions = [] } = useQuery<Transaction[]>({
     queryKey: ['transactions', user?.username],
     queryFn: () => getTransactions(undefined, user!.username, 50),
     enabled: !!user?.username,
-    refetchInterval: 15000,
   });
 
   const cancelBidMutation = useMutation({

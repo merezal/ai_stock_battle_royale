@@ -16,7 +16,6 @@ export function CompanyDetail() {
     queryKey: ['company', ticker],
     queryFn: () => getCompany(ticker!),
     enabled: !!ticker,
-    refetchInterval: 10000,
   });
 
   const { data: userPortfolio } = useQuery({
@@ -42,14 +41,12 @@ export function CompanyDetail() {
     queryKey: ['orderbook', ticker],
     queryFn: () => getOrderBook(ticker),
     enabled: !!ticker,
-    refetchInterval: 5000,
   });
 
   const { data: transactions } = useQuery({
     queryKey: ['transactions', ticker],
     queryFn: () => getTransactions(ticker, undefined, 20),
     enabled: !!ticker,
-    refetchInterval: 10000,
   });
 
   if (isLoading) {
