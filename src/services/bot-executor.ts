@@ -9,7 +9,11 @@ import {
   emitOrderbookUpdated,
   emitLeaderboardUpdated,
   emitPortfolioUpdated,
+  emitTransactionsNew,
 } from '../lib/emit';
+
+const ORDER_TOOLS = new Set(['place_bid', 'place_ask', 'cancel_bid', 'cancel_ask']);
+const FULFILL_TOOLS = new Set(['fulfill_bid', 'fulfill_ask']);
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3.2';
@@ -279,6 +283,23 @@ export async function executeBot(userId: number, promptId: number, promptText: s
           result,
         });
 
+        // Emit socket events for mutating tools so clients update live during the turn
+        if (ORDER_TOOLS.has(name)) {
+          emitOrderbookUpdated();
+          emitPortfolioUpdated(userId, user.username);
+        } else if (FULFILL_TOOLS.has(name)) {
+          emitOrderbookUpdated();
+          emitCompaniesUpdated();
+          emitLeaderboardUpdated();
+          emitPortfolioUpdated(userId, user.username);
+          // Extract tickers from fulfillment results so transaction queries refresh
+          const fulfillments = (result as { fulfillments?: Array<{ ticker?: string }> })?.fulfillments ?? [];
+          const tickers = [...new Set(fulfillments.map(f => f.ticker).filter(Boolean))] as string[];
+          for (const ticker of tickers) {
+            emitTransactionsNew(ticker);
+          }
+        }
+
         // Log the activity
         await logActivity(userId, promptId, name, args, result);
 
@@ -383,6 +404,7 @@ export async function executeAllActiveBots() {
 
   executionState.isExecuting = true;
   executionState.lastCycleStart = new Date();
+  emitBotStatus(getFullBotStatus()); // notify clients immediately that execution has started
 
   const activePrompts = await prisma.llmPrompt.findMany({
     where: { isActive: true },

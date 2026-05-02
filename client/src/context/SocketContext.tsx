@@ -51,14 +51,19 @@ export function SocketProvider({
     });
 
     socket.on('portfolio:updated', ({ userId: uid, username }: { userId: number; username: string }) => {
+      // Own portfolio (Dashboard / Portfolio page)
       queryClient.invalidateQueries({ queryKey: ['portfolio', uid] });
-      queryClient.invalidateQueries({ queryKey: ['portfolio', 'username', username] });
       queryClient.invalidateQueries({ queryKey: ['user', uid] });
-      queryClient.invalidateQueries({ queryKey: ['portfolio-history', username] });
+      // UserProfile page (anyone viewing this user's profile)
+      queryClient.invalidateQueries({ queryKey: ['userProfile', username] });
+      queryClient.invalidateQueries({ queryKey: ['transactions', username] });
+      queryClient.invalidateQueries({ queryKey: ['portfolioHistory', username] });
+      // CompanyDetail majority-shareholder check
+      queryClient.invalidateQueries({ queryKey: ['portfolio', 'username', username] });
     });
 
-    socket.on('transactions:new', ({ ticker }: { ticker: string }) => {
-      queryClient.invalidateQueries({ queryKey: ['transactions', ticker] });
+    socket.on('transactions:new', ({ ticker }: { ticker?: string }) => {
+      // Invalidates ['transactions'], ['transactions', ticker], ['transactions', username] — all via prefix match
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
     });
 

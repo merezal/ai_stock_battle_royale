@@ -35,7 +35,7 @@ export function emitPortfolioUpdated(userId: number, username: string) {
   emit('portfolio:updated', { userId, username });
 }
 
-export function emitTransactionsNew(ticker: string) {
+export function emitTransactionsNew(ticker?: string) {
   emit('transactions:new', { ticker });
 }
 
