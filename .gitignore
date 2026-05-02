@@ -6,4 +6,5 @@ dist/
 postgres_docker/docker_volume/
 TODO.txt
 CLAUDE.md
+.claude
 postgres_docker

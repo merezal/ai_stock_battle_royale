@@ -1,8 +1,22 @@
-import { useParams, Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { getPortfolioByUsername, getTransactions, getPortfolioHistory } from '../api/client';
 import { useCurrentUser } from '../hooks/useCurrentUser';
-import { PortfolioChart } from '../components/PortfolioChart';
+import { fmt, STARTING_CAPITAL } from '../utils/format';
+import type { Transaction } from '../types';
+
+function Stat({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+  return (
+    <div style={{ padding: 16, borderRight: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
+      <div className="t-label" style={{ marginBottom: 4 }}>{label}</div>
+      <div style={{
+        fontFamily: 'var(--font-mono)', fontSize: 18,
+        fontVariantNumeric: 'tabular-nums',
+        color: highlight ? 'var(--fg-strong)' : 'var(--fg)',
+      }}>{value}</div>
+    </div>
+  );
+}
 
 export function UserProfile() {
   const { username } = useParams<{ username: string }>();
@@ -14,13 +28,13 @@ export function UserProfile() {
     enabled: !!username,
   });
 
-  const { data: transactions } = useQuery({
+  const { data: transactions = [] } = useQuery<Transaction[]>({
     queryKey: ['transactions', username],
-    queryFn: () => getTransactions(undefined, username, 10),
+    queryFn: () => getTransactions(undefined, username, 20),
     enabled: !!username,
   });
 
-  const { data: portfolioHistory } = useQuery({
+  const { data: history = [] } = useQuery({
     queryKey: ['portfolioHistory', username],
     queryFn: () => getPortfolioHistory(username!),
     enabled: !!username,
@@ -28,206 +42,197 @@ export function UserProfile() {
 
   if (isLoading) {
     return (
-      <div className="text-center py-12">
-        <p className="text-gray-400 text-lg">Loading...</p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--fg-muted)' }}>
+        Loading...
       </div>
     );
   }
 
   if (error || !portfolio) {
     return (
-      <div className="text-center py-12">
-        <h1 className="text-2xl font-bold text-white mb-4">User Not Found</h1>
-        <p className="text-gray-400">The user "{username}" does not exist.</p>
-        <Link
-          to="/leaderboard"
-          className="inline-block mt-4 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md"
-        >
-          View Leaderboard
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 16 }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--fg-muted)' }}>
+          ERR / Operator "{username}" not found.
+        </span>
+        <Link to="/leaderboard" style={{
+          fontFamily: 'var(--font-display)', fontSize: 11, fontWeight: 500,
+          letterSpacing: '0.08em', textTransform: 'uppercase',
+          color: 'var(--fg)', textDecoration: 'none',
+          border: '1px solid var(--border-strong)', padding: '6px 14px',
+        }}>
+          → Operators list
         </Link>
       </div>
     );
   }
 
   const isOwnProfile = currentUser?.username === username;
+  const pnl = portfolio.totalValue - STARTING_CAPITAL;
+  const pnlPct = ((pnl / STARTING_CAPITAL) * 100).toFixed(2);
+  const isGain = pnl >= 0;
+
+  // simple sparkline from history
+  const histPoints = history.slice(-20).map(h => h.value);
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-white">
-          <span className="text-green-400">{portfolio.username}</span>'s Portfolio
-          {isOwnProfile && <span className="text-gray-500 text-lg ml-2">(You)</span>}
-        </h1>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Sub-header */}
+      <div style={{
+        display: 'flex', alignItems: 'center', padding: '10px 16px',
+        borderBottom: '1px solid var(--border)', gap: 16, flexShrink: 0,
+      }}>
+        <span className="t-mark" style={{ fontSize: 14 }}>{portfolio.username}</span>
         {isOwnProfile && (
-          <Link
-            to="/"
-            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium"
-          >
-            Go to Dashboard
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-subtle)' }}>← you</span>
+        )}
+        <span style={{ color: 'var(--fg-subtle)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>/</span>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: isGain ? 'var(--fg)' : 'var(--state-loss)' }}>
+          {isGain ? '+' : ''}{pnlPct}% from starting capital
+        </span>
+        {isOwnProfile && (
+          <Link to="/portfolio" style={{
+            marginLeft: 'auto',
+            fontFamily: 'var(--font-display)', fontSize: 11, fontWeight: 500,
+            letterSpacing: '0.08em', textTransform: 'uppercase',
+            color: 'var(--fg-muted)', textDecoration: 'none',
+            border: '1px solid var(--border)', padding: '4px 12px',
+          }}>
+            → My portfolio
           </Link>
         )}
       </div>
 
-      {/* Portfolio Value Chart */}
-      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-        <h2 className="text-xl font-semibold text-white mb-4">Portfolio Value Over Time</h2>
-        <PortfolioChart history={portfolioHistory || []} />
-      </div>
+      <div className="sr-content-row" style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+        {/* Main */}
+        <div style={{ flex: 1, overflow: 'auto' }}>
+          {/* Stats */}
+          <div className="sr-stats-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)' }}>
+            <Stat label="Total value" value={fmt(portfolio.totalValue)} highlight />
+            <Stat label="Cash" value={fmt(portfolio.cashBalance)} />
+            <Stat label="Available cash" value={fmt(portfolio.availableCash)} />
+            <Stat label="Stock exposure" value={fmt(portfolio.stockValue)} />
+          </div>
 
-      {/* Portfolio Summary */}
-      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-        <h2 className="text-xl font-semibold text-white mb-4">Current Holdings</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div>
-            <p className="text-gray-400 text-sm">Total Value</p>
-            <p className="text-2xl font-bold text-green-400">
-              ${portfolio.totalValue.toLocaleString()}
-            </p>
-          </div>
-          <div>
-            <p className="text-gray-400 text-sm">Cash Balance</p>
-            <p className="text-xl font-semibold text-white">
-              ${portfolio.cashBalance.toLocaleString()}
-            </p>
-          </div>
-          <div>
-            <p className="text-gray-400 text-sm">Available Cash</p>
-            <p className="text-xl font-semibold text-white">
-              ${portfolio.availableCash.toLocaleString()}
-            </p>
-          </div>
-          <div>
-            <p className="text-gray-400 text-sm">Stock Value</p>
-            <p className="text-xl font-semibold text-white">
-              ${portfolio.stockValue.toLocaleString()}
-            </p>
-          </div>
-        </div>
+          {/* Mini sparkline */}
+          {histPoints.length >= 2 && (
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
+              <div className="t-label" style={{ marginBottom: 8 }}>Portfolio trend</div>
+              <MiniSparkline points={histPoints} />
+            </div>
+          )}
 
-        {/* Holdings */}
-        {portfolio.holdings.length > 0 ? (
-          <div>
-            <h3 className="text-lg font-medium text-white mb-3">Holdings</h3>
-            <div className="overflow-x-auto">
-              <table className="w-full">
+          {/* Holdings */}
+          <div style={{ borderBottom: '1px solid var(--border)' }}>
+            <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)' }}>
+              <span className="t-label">Holdings / {portfolio.holdings.length}</span>
+            </div>
+            {portfolio.holdings.length === 0 ? (
+              <div style={{ padding: 16, fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--fg-subtle)' }}>
+                ∅ No holdings.
+              </div>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-mono)', fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
                 <thead>
-                  <tr className="text-left text-gray-400 text-sm border-b border-gray-700">
-                    <th className="pb-2">Ticker</th>
-                    <th className="pb-2">Company</th>
-                    <th className="pb-2 text-right">Shares</th>
-                    <th className="pb-2 text-right">VWAP</th>
-                    <th className="pb-2 text-right">Value</th>
+                  <tr>
+                    {['Entity', 'Name', 'Shares', 'VWAP', 'Value'].map((h, i) => (
+                      <th key={h} style={{
+                        padding: '8px 12px', textAlign: i <= 1 ? 'left' : 'right',
+                        borderBottom: '1px solid var(--border)',
+                        fontFamily: 'var(--font-display)', fontSize: 10, fontWeight: 500,
+                        letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-muted)',
+                      }}>{h}</th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {portfolio.holdings.map((h) => (
-                    <tr key={h.ticker} className="border-b border-gray-700/50">
-                      <td className="py-2">
-                        <Link
-                          to={`/companies/${h.ticker}`}
-                          className="text-green-400 hover:text-green-300 font-medium"
-                        >
-                          {h.ticker}
-                        </Link>
+                  {portfolio.holdings.map(h => (
+                    <tr key={h.ticker}>
+                      <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)' }}>
+                        <Link to={`/?entity=${h.ticker}`} style={{ color: 'var(--fg)', textDecoration: 'none' }}>{h.ticker}</Link>
                       </td>
-                      <td className="py-2 text-gray-300">{h.companyName}</td>
-                      <td className="py-2 text-right text-white">
+                      <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', color: 'var(--fg-muted)' }}>{h.companyName}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'right', borderBottom: '1px solid var(--border)' }}>
                         {h.sharesOwned}
-                        {h.reservedShares > 0 && (
-                          <span className="text-gray-500 text-sm ml-1">
-                            ({h.reservedShares} reserved)
-                          </span>
-                        )}
+                        {h.reservedShares > 0 && <span style={{ color: 'var(--fg-subtle)', marginLeft: 6 }}>({h.reservedShares} rsv)</span>}
                       </td>
-                      <td className="py-2 text-right text-white">
-                        ${h.currentPrice?.toLocaleString()}
+                      <td style={{ padding: '8px 12px', textAlign: 'right', borderBottom: '1px solid var(--border)', color: 'var(--fg-muted)' }}>
+                        {h.currentPrice != null ? fmt(h.currentPrice) : '—'}
                       </td>
-                      <td className="py-2 text-right text-white font-medium">
-                        ${h.positionValue?.toLocaleString()}
+                      <td style={{ padding: '8px 12px', textAlign: 'right', borderBottom: '1px solid var(--border)' }}>
+                        {h.positionValue != null ? fmt(h.positionValue) : '—'}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
+            )}
           </div>
-        ) : (
-          <p className="text-gray-500 text-center py-4">
-            {portfolio.username} doesn't own any stocks yet.
-          </p>
-        )}
-      </div>
+        </div>
 
-      {/* Recent Transactions */}
-      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-        <h2 className="text-xl font-semibold text-white mb-4">Recent Transactions</h2>
-        {transactions && transactions.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="text-left text-gray-400 text-sm border-b border-gray-700">
-                  <th className="pb-2">Type</th>
-                  <th className="pb-2">Stock</th>
-                  <th className="pb-2">Counterparty</th>
-                  <th className="pb-2 text-right">Shares</th>
-                  <th className="pb-2 text-right">Price</th>
-                  <th className="pb-2 text-right">Total</th>
-                  <th className="pb-2 text-right">Time</th>
-                </tr>
-              </thead>
-              <tbody>
-                {transactions.map((tx) => {
-                  const isBuyer = tx.buyer === username;
-                  const counterparty = isBuyer ? tx.seller : tx.buyer;
-                  return (
-                    <tr key={tx.transactionId} className="border-b border-gray-700/50">
-                      <td className="py-2">
-                        <span
-                          className={`px-2 py-1 rounded text-xs font-medium ${
-                            isBuyer
-                              ? 'bg-green-900/50 text-green-400'
-                              : 'bg-red-900/50 text-red-400'
-                          }`}
-                        >
-                          {isBuyer ? 'BUY' : 'SELL'}
-                        </span>
-                      </td>
-                      <td className="py-2">
-                        <Link
-                          to={`/companies/${tx.ticker}`}
-                          className="text-green-400 hover:text-green-300 font-medium"
-                        >
-                          {tx.ticker}
-                        </Link>
-                      </td>
-                      <td className="py-2">
-                        <Link
-                          to={`/users/${counterparty}`}
-                          className="text-blue-400 hover:text-blue-300"
-                        >
-                          {counterparty}
-                        </Link>
-                      </td>
-                      <td className="py-2 text-right text-white">{tx.shares}</td>
-                      <td className="py-2 text-right text-white">
-                        ${tx.pricePerShare.toLocaleString()}
-                      </td>
-                      <td className="py-2 text-right text-white font-medium">
-                        ${(tx.totalAmount ?? Number(tx.shares) * tx.pricePerShare).toLocaleString()}
-                      </td>
-                      <td className="py-2 text-right text-gray-400 text-sm">
-                        {new Date(tx.timestamp).toLocaleString()}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+        {/* Transaction log sidebar */}
+        <div className="sr-panel-right" style={{ width: 360, flexShrink: 0, borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)' }}>
+            <span className="t-label">Transaction log / {transactions.length}</span>
           </div>
-        ) : (
-          <p className="text-gray-500">No transactions yet.</p>
-        )}
+          <div style={{ flex: 1, overflow: 'auto' }}>
+            {transactions.length === 0 ? (
+              <div style={{ padding: 16, fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--fg-subtle)' }}>∅ No transactions.</div>
+            ) : (
+              transactions.map(tx => (
+                <TxRow key={tx.transactionId} tx={tx} username={username!} />
+              ))
+            )}
+          </div>
+        </div>
       </div>
     </div>
+  );
+}
+
+function TxRow({ tx, username }: { tx: Transaction; username: string }) {
+  const isBuy = tx.buyer === username;
+  const counterparty = isBuy ? tx.seller : tx.buyer;
+  const total = tx.totalAmount ?? Number(tx.shares) * tx.pricePerShare;
+
+  return (
+    <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+        <span style={{
+          fontFamily: 'var(--font-display)', fontSize: 10, fontWeight: 500,
+          letterSpacing: '0.08em', textTransform: 'uppercase',
+          color: isBuy ? 'var(--fg)' : 'var(--state-loss)',
+        }}>
+          {isBuy ? '▲ Acquire' : '▼ Liquidate'}
+        </span>
+        <span style={{ color: 'var(--fg-subtle)' }}>{new Date(tx.timestamp).toLocaleString()}</span>
+      </div>
+      <div style={{ display: 'flex', gap: 16, color: 'var(--fg-muted)' }}>
+        {tx.ticker && (
+          <Link to={`/?entity=${tx.ticker}`} style={{ color: 'var(--fg)', textDecoration: 'none' }}>{tx.ticker}</Link>
+        )}
+        <span>{tx.shares} shr @ § {tx.pricePerShare.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+        <span style={{ marginLeft: 'auto', color: 'var(--fg)' }}>
+          § {total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        </span>
+      </div>
+      <div style={{ color: 'var(--fg-subtle)', marginTop: 2 }}>
+        ↔ {counterparty}
+      </div>
+    </div>
+  );
+}
+
+function MiniSparkline({ points }: { points: number[] }) {
+  const w = 400, h = 40;
+  const min = Math.min(...points), max = Math.max(...points);
+  const dx = w / (points.length - 1);
+  const path = points.map((p, i) =>
+    (i === 0 ? 'M' : 'L') + (i * dx).toFixed(1) + ',' + (h - ((p - min) / (max - min || 1)) * h).toFixed(1)
+  ).join(' ');
+  const isLoss = points[points.length - 1] < points[0];
+  return (
+    <svg width="100%" viewBox={`0 0 ${w} ${h}`} style={{ display: 'block', height: 40 }}>
+      <path d={path} fill="none" stroke={isLoss ? 'var(--state-loss)' : 'var(--fg)'} strokeWidth={1.25} />
+    </svg>
   );
 }

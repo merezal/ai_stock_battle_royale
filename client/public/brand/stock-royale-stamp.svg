@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240">
+  <defs>
+    <path id="circ" d="M 120,120 m -96,0 a 96,96 0 1,1 192,0 a 96,96 0 1,1 -192,0"></path>
+  </defs>
+
+  <!-- Rotating: outer rings + orbiting text -->
+  <g>
+    <animateTransform
+      attributeName="transform"
+      type="rotate"
+      from="360 120 120"
+      to="0 120 120"
+      dur="120s"
+      repeatCount="indefinite"
+    />
+    <circle cx="120" cy="120" r="116" fill="none" stroke="currentColor" stroke-width="1"/>
+    <circle cx="120" cy="120" r="96" fill="none" stroke="currentColor" stroke-width="1"/>
+    <text font-family="Geist Mono, ui-monospace, monospace" font-weight="500" font-size="10.5" letter-spacing="3.9" fill="currentColor">
+      <textPath href="#circ" startOffset="0">STOCK ROYALE · SYNTHETIC EXCHANGE · MEDIATED BY LANGUAGE · </textPath>
+    </text>
+  </g>
+
+  <!-- Static: inner ring + SR -->
+  <circle cx="120" cy="120" r="32" fill="none" stroke="currentColor" stroke-width="1"/>
+  <text x="120" y="125" text-anchor="middle" font-family="Geist Mono, ui-monospace, monospace" font-weight="500" font-size="16" letter-spacing="3" fill="currentColor">SR</text>
+</svg>
