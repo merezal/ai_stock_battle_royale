@@ -9,7 +9,8 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "db:seed": "bash -c 'set -a; . ./.env; set +a; DATABASE_URL=\"postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:${POSTGRES_PORT:-5432}/${POSTGRES_DB}?schema=public\" ts-node-dev --transpile-only scripts/seed.ts'"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

@@ -225,6 +225,7 @@ export async function deletePost(postId: number): Promise<void> {
 export interface BotPrompt {
   promptId: number | null;
   promptText: string;
+  perspective: string | null;
   isActive: boolean;
   version: number;
   lastModified?: string;

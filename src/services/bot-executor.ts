@@ -31,8 +31,12 @@ interface OllamaResponse {
 }
 
 // Build the system prompt for the trading bot
-function buildSystemPrompt(username: string): string {
-  return `You are an AI trading bot competing in Stock Battle Royale. You are trading on behalf of user "${username}".
+function buildSystemPrompt(username: string, perspective?: string | null): string {
+  const perspectiveBlock = perspective?.trim()
+    ? `\n\n## Your Current Perspective\nThis is what you wrote to yourself at the end of your last turn. Use it to maintain strategy continuity — you don't need to re-query things you already know:\n\n${perspective.trim()}\n`
+    : '';
+
+  return `You are an AI trading bot competing in Stock Battle Royale. You are trading on behalf of user "${username}".${perspectiveBlock}
 
 Your portfolio total asset value is (cash + stock holdings).
 
@@ -52,7 +56,9 @@ Key trading concepts:
 - ASK: A sell order - you reserve shares to sell at a specified price
 - You can fulfill OTHER users' orders immediately (not your own)
 - Market price is determined by the last transaction
-- Most trading actions accept arrays, so you can place/cancel/fulfill multiple orders in a single tool call to be more efficient`;
+- Most trading actions accept arrays, so you can place/cancel/fulfill multiple orders in a single tool call to be more efficient
+
+CRITICAL: Never assume or invent ticker symbols. Always call get_companies first to see exactly which companies exist before placing any orders. Only trade tickers returned by that tool.`;
 }
 
 // Convert our tool definitions to Ollama format
@@ -113,18 +119,84 @@ async function logActivity(
   }
 }
 
+// Force a perspective update at the end of every turn.
+// Passes the full turn conversation so the bot sees actual tool results, not just a compact log.
+async function forcePerspectiveUpdate(
+  userId: number,
+  promptId: number,
+  promptText: string,
+  turnMessages: OllamaMessage[],
+  currentPerspective?: string | null,
+): Promise<void> {
+  // Build a readable transcript from the turn — skip system + initial user (mandate)
+  const transcript = turnMessages
+    .slice(2)
+    .map(m => {
+      if (m.role === 'assistant') {
+        const parts: string[] = [];
+        if (m.content?.trim()) parts.push(`[reasoning]: ${m.content.trim()}`);
+        if (m.tool_calls && m.tool_calls.length > 0) {
+          const calls = m.tool_calls
+            .map(tc => `  → ${tc.function.name}(${JSON.stringify(tc.function.arguments)})`)
+            .join('\n');
+          parts.push(`[called tools]\n${calls}`);
+        }
+        return parts.length > 0 ? parts.join('\n') : null;
+      }
+      if (m.role === 'tool') {
+        const content = m.content.length > 800 ? m.content.slice(0, 800) + '…' : m.content;
+        return `[tool result]: ${content}`;
+      }
+      return null;
+    })
+    .filter(Boolean)
+    .join('\n\n');
+
+  const messages: OllamaMessage[] = [
+    {
+      role: 'system',
+      content: `You are updating your market perspective for your next turn. Be concise (200–400 words). Cover: current holdings and their status, active strategy and reasoning, specific price targets or triggers you are watching, and your planned first action next turn. Respond with ONLY the perspective text — no preamble, no labels, no commentary.`,
+    },
+    {
+      role: 'user',
+      content: [
+        `Your mandate:\n${promptText}`,
+        currentPerspective ? `Your perspective from last turn (edit this, don't rewrite from scratch):\n${currentPerspective}` : 'This is your first perspective — write it fresh.',
+        transcript ? `What happened this turn:\n${transcript}` : '(no actions taken this turn)',
+        'Write your updated market perspective:',
+      ].join('\n\n'),
+    },
+  ];
+
+  try {
+    const response = await callOllama(messages, []);
+    const text = (response.message.content || '').trim();
+    if (text.length > 0) {
+      await prisma.llmPrompt.update({
+        where: { id: promptId },
+        data: { perspective: text.slice(0, 4000) },
+      });
+      await logActivity(userId, promptId, 'perspective_updated', {}, { length: text.length });
+      logger.debug('Perspective updated', { userId, length: text.length });
+    }
+  } catch (error) {
+    // Non-fatal — perspective update failure should never crash the bot turn
+    logger.debug('Perspective update failed', { error: error instanceof Error ? error.message : error });
+  }
+}
+
 // Execute bot for a single user
 export async function executeBot(userId: number, promptId: number, promptText: string) {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { username: true },
-  });
+  const [user, prompt] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId }, select: { username: true } }),
+    prisma.llmPrompt.findUnique({ where: { id: promptId }, select: { perspective: true } }),
+  ]);
 
   if (!user) {
     throw new Error('User not found');
   }
 
-  const systemPrompt = buildSystemPrompt(user.username);
+  const systemPrompt = buildSystemPrompt(user.username, prompt?.perspective);
   const tools = getOllamaTools();
 
   // Each turn gets a fresh system + user prompt (no context from previous turns)
@@ -135,6 +207,7 @@ export async function executeBot(userId: number, promptId: number, promptText: s
 
   let toolCallCount = 0;
   const executionLog: Array<{ action: string; result: unknown }> = [];
+  let executionResult: { success: boolean; error?: string; toolCallCount: number; executionLog: typeof executionLog };
 
   try {
     // Within a single turn: loop up to MAX_TOOL_CALLS times
@@ -207,11 +280,7 @@ export async function executeBot(userId: number, promptId: number, promptText: s
       executionLog,
     });
 
-    return {
-      success: true,
-      toolCallCount,
-      executionLog,
-    };
+    executionResult = { success: true as const, toolCallCount, executionLog };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
@@ -221,13 +290,13 @@ export async function executeBot(userId: number, promptId: number, promptText: s
       executionLog,
     });
 
-    return {
-      success: false,
-      error: errorMessage,
-      toolCallCount,
-      executionLog,
-    };
+    executionResult = { success: false as const, error: errorMessage, toolCallCount, executionLog };
   }
+
+  // Always update perspective at end of turn, regardless of success/failure
+  await forcePerspectiveUpdate(userId, promptId, promptText, messages, prompt?.perspective);
+
+  return executionResult;
 }
 
 // Queue and execution state tracking

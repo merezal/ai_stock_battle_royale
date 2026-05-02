@@ -37,6 +37,7 @@ router.get('/prompt', authenticate, async (req: Request, res: Response) => {
     return res.json({
       promptId: prompt.id,
       promptText: prompt.promptText,
+      perspective: prompt.perspective ?? null,
       isActive: prompt.isActive,
       version: prompt.version,
       lastModified: prompt.lastModified,
