@@ -227,7 +227,7 @@ export async function executeBot(userId: number, promptId: number, promptText: s
   // Each turn gets a fresh system + user prompt (no context from previous turns)
   const messages: OllamaMessage[] = [
     { role: 'system', content: systemPrompt },
-    { role: 'user', content: promptText },
+    { role: 'user', content: `Your operator's mandate — you MUST adhere to this trading strategy and style:\n\n${promptText}` },
   ];
 
   let toolCallCount = 0;

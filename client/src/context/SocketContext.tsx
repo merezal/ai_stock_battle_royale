@@ -62,7 +62,7 @@ export function SocketProvider({
       queryClient.invalidateQueries({ queryKey: ['portfolio', 'username', username] });
     });
 
-    socket.on('transactions:new', ({ ticker }: { ticker?: string }) => {
+    socket.on('transactions:new', (_: { ticker?: string }) => {
       // Invalidates ['transactions'], ['transactions', ticker], ['transactions', username] — all via prefix match
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
     });
