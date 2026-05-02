@@ -53,8 +53,8 @@ export function SocketProvider({
     socket.on('portfolio:updated', ({ userId: uid, username }: { userId: number; username: string }) => {
       queryClient.invalidateQueries({ queryKey: ['portfolio', uid] });
       queryClient.invalidateQueries({ queryKey: ['portfolio', 'username', username] });
-      // Also refresh the user object (cashBalance etc.)
       queryClient.invalidateQueries({ queryKey: ['user', uid] });
+      queryClient.invalidateQueries({ queryKey: ['portfolio-history', username] });
     });
 
     socket.on('transactions:new', ({ ticker }: { ticker: string }) => {
@@ -83,14 +83,11 @@ export function SocketProvider({
       );
     });
 
-    socket.on('bot:perspective', ({ userId: uid, username, perspective }: { userId: number; username: string; perspective: string }) => {
-      // Update the perspective field in the cached botPrompt for any user
+    socket.on('bot:perspective', ({ userId: uid, perspective }: { userId: number; username: string; perspective: string }) => {
       queryClient.setQueryData<{ promptId: number | null; promptText: string; perspective: string | null; isActive: boolean; version: number; lastModified?: string }>(
         ['botPrompt', uid],
         (prev) => prev ? { ...prev, perspective } : prev
       );
-      // Also invalidate portfolio-history since perspective implies a completed turn
-      queryClient.invalidateQueries({ queryKey: ['portfolio-history', username] });
     });
 
     return () => {

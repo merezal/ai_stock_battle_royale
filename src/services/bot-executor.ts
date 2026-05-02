@@ -344,7 +344,7 @@ const executionState: ExecutionState = {
   isExecuting: false,
 };
 
-// Get current execution state for API
+// Get current execution state for API (partial — used internally and by HTTP route)
 export function getExecutionState() {
   return {
     currentBot: executionState.currentBot
@@ -360,6 +360,17 @@ export function getExecutionState() {
     lastCycleStart: executionState.lastCycleStart?.toISOString() || null,
     lastCycleEnd: executionState.lastCycleEnd?.toISOString() || null,
     isExecuting: executionState.isExecuting,
+  };
+}
+
+// Full status matching the shape of GET /bot/admin/status — used for socket pushes
+export function getFullBotStatus() {
+  return {
+    loopRunning: isBotLoopRunning(),
+    activeBotsCount:
+      executionState.queue.length + (executionState.currentBot ? 1 : 0),
+    executionInterval: parseInt(process.env.BOT_EXECUTION_INTERVAL || '30000', 10),
+    ...getExecutionState(),
   };
 }
 
@@ -387,7 +398,7 @@ export async function executeAllActiveBots() {
     promptId: prompt.id,
     promptText: prompt.promptText,
   }));
-  emitBotStatus(getExecutionState());
+  emitBotStatus(getFullBotStatus());
 
   const results: Array<{
     userId: number;
@@ -400,7 +411,7 @@ export async function executeAllActiveBots() {
   while (executionState.queue.length > 0) {
     const bot = executionState.queue.shift()!;
     executionState.currentBot = bot;
-    emitBotStatus(getExecutionState());
+    emitBotStatus(getFullBotStatus());
 
     logger.debug('Starting bot execution', { username: bot.username });
 
@@ -434,7 +445,7 @@ export async function executeAllActiveBots() {
   executionState.currentBot = null;
   executionState.isExecuting = false;
   executionState.lastCycleEnd = new Date();
-  emitBotStatus(getExecutionState());
+  emitBotStatus(getFullBotStatus());
 
   return results;
 }

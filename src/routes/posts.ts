@@ -136,6 +136,8 @@ router.put('/:postId', authenticate, async (req: Request<{ postId: string }>, re
       },
     });
 
+    emitPostsUpdated();
+
     return res.json({
       postId: updatedPost.id,
       content: updatedPost.content,
