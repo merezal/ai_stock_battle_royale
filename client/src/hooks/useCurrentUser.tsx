@@ -42,7 +42,7 @@ export function CurrentUserProvider({ children }: { children: ReactNode }) {
     queryKey: ['user', userId],
     queryFn: () => getUser(userId!),
     enabled: userId !== null,
-    staleTime: 0, // Always consider data stale to ensure fresh fetches
+    staleTime: 30_000,
   });
 
   return (

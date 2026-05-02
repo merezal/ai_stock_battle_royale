@@ -14,6 +14,7 @@ export interface Holding {
   sharesOwned: number;
   reservedShares: number;
   availableShares: number;
+  totalSharesIssued?: number;
   currentPrice?: number;
   positionValue?: number;
 }

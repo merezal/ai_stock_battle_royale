@@ -236,6 +236,7 @@ export function Layout() {
   const { data: botStatus } = useQuery<BotStatus>({
     queryKey: ['botStatus'],
     queryFn: getBotStatus,
+    staleTime: Infinity,
   });
 
   const { data: botPrompt } = useQuery({
@@ -265,6 +266,7 @@ export function Layout() {
   return (
     <div
       data-theme="dark"
+      className="sr-layout-root"
       style={{
         display: 'flex', flexDirection: 'column',
         height: '100dvh', overflow: 'hidden',
@@ -276,17 +278,18 @@ export function Layout() {
         isRunning={botStatus?.loopRunning ?? false}
         onLogout={handleLogout}
       />
-      <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+      <div className="sr-layout-body" style={{ flex: 1, display: 'flex', minHeight: 0 }}>
         <Sidebar
           active={active}
           entityCount={companies.length}
           mandateCount={mandateCount}
           operatorCount={leaderboard.length}
         />
-        <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'auto', position: 'relative' }}>
+        <main className="sr-layout-main" style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'auto', position: 'relative' }}>
           <img
             src="/brand/stock-royale-stamp.svg"
             alt=""
+            className="sr-bg-stamp"
             style={{
               position: 'absolute', top: '50%', left: '50%',
               transform: 'translate(-50%, -50%)',
@@ -294,7 +297,7 @@ export function Layout() {
               filter: 'invert(1)', zIndex: 0,
             }}
           />
-          <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+          <div className="sr-layout-inner" style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
             <Outlet />
           </div>
         </main>

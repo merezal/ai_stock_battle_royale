@@ -288,6 +288,7 @@ export function Bot() {
       setHasChanges(false);
       queryClient.invalidateQueries({ queryKey: ['botPrompt', user?.id] });
     },
+    onError: (err: Error) => setRunResult({ success: false, error: err.message }),
   });
 
   const toggleMutation = useMutation({
@@ -296,6 +297,7 @@ export function Bot() {
       queryClient.invalidateQueries({ queryKey: ['botPrompt', user?.id] });
       queryClient.invalidateQueries({ queryKey: ['botStatus'] });
     },
+    onError: (err: Error) => setRunResult({ success: false, error: err.message }),
   });
 
   const runOnceMutation = useMutation({
@@ -328,9 +330,9 @@ export function Bot() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div className="sr-page" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Sub-header */}
-      <div style={{
+      <div className="sr-subheader" style={{
         display: 'flex', alignItems: 'center',
         padding: '10px 16px', borderBottom: '1px solid var(--border)',
         gap: 16, flexShrink: 0,
@@ -347,7 +349,7 @@ export function Bot() {
             · executing: <span style={{ color: 'var(--fg)' }}>{botStatus.currentBot.username}</span>
           </span>
         )}
-        <span style={{ flex: 1 }} />
+        <span className="sr-spacer" style={{ flex: 1 }} />
         <TBtn size="lg" onClick={() => setComposerOpen(true)}>
           {botPrompt?.promptId ? 'Edit mandate →' : '+ New mandate'}
         </TBtn>
@@ -356,7 +358,7 @@ export function Bot() {
       {/* Content */}
       <div className="sr-content-row" style={{ flex: 1, display: 'flex', minHeight: 0 }}>
         {/* Main area */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
+        <div className="sr-scroll-jail" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
           {/* Current mandate preview */}
           <div style={{ padding: 16, borderBottom: '1px solid var(--border)' }}>
             <div className="t-label" style={{ marginBottom: 12 }}>Current mandate</div>
@@ -511,7 +513,7 @@ export function Bot() {
           <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)' }}>
             <span className="t-label">Activity log</span>
           </div>
-          <div style={{ flex: 1, overflow: 'auto' }}>
+          <div className="sr-scroll-jail" style={{ flex: 1, overflow: 'auto' }}>
             {logsLoading ? (
               <div style={{ padding: 16, fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--fg-muted)' }}>Loading...</div>
             ) : logs.length === 0 ? (

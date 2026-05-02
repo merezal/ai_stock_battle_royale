@@ -77,12 +77,12 @@ export function SocketProvider({
       queryClient.setQueryData(['botStatus'], status);
     });
 
-    socket.on('bot:log', (log: BotActivityLog) => {
+    socket.on('bot:log', (log: BotActivityLog & { userId?: number }) => {
+      if (log.userId !== undefined && log.userId !== userId) return;
       queryClient.setQueryData<BotActivityLog[]>(
         ['botLogs', userId],
         (prev) => {
           if (!prev) return [log];
-          // Prepend new log, keep at most 40 entries to match the fetch limit
           return [log, ...prev].slice(0, 40);
         }
       );

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -212,8 +212,8 @@ function EntityPanel({ company, onDeselect }: { company: Company; onDeselect: ()
     onError: (err: Error) => setOrderError(err.message),
   });
 
-  const cancelBidMutation = useMutation({ mutationFn: (id: number) => cancelBid(id), onSuccess: invalidate });
-  const cancelAskMutation = useMutation({ mutationFn: (id: number) => cancelAsk(id), onSuccess: invalidate });
+  const cancelBidMutation = useMutation({ mutationFn: (id: number) => cancelBid(id), onSuccess: invalidate, onError: (err: Error) => setOrderError(err.message) });
+  const cancelAskMutation = useMutation({ mutationFn: (id: number) => cancelAsk(id), onSuccess: invalidate, onError: (err: Error) => setOrderError(err.message) });
 
   const handleOrder = () => {
     if (!userId) { setOrderError('Not authenticated.'); return; }
@@ -229,7 +229,7 @@ function EntityPanel({ company, onDeselect }: { company: Company; onDeselect: ()
   const topAsks = (orderBook?.asks ?? []).slice(0, 3);
 
   return (
-    <aside className="sr-panel-right" style={{
+    <aside className="sr-panel-right sr-entity-panel" style={{
       width: 380, flexShrink: 0,
       borderLeft: '1px solid var(--border)',
       display: 'flex', flexDirection: 'column',
@@ -238,9 +238,15 @@ function EntityPanel({ company, onDeselect }: { company: Company; onDeselect: ()
     }}>
       {/* Header */}
       <div style={{ padding: 16, borderBottom: '1px solid var(--border)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span className="t-mark" style={{ fontSize: 16 }}>{company.ticker}</span>
-          <button onClick={onDeselect} style={{ background: 0, border: 0, color: 'var(--fg-subtle)', cursor: 'pointer', fontSize: 12 }}>✕</button>
+          <button onClick={onDeselect} style={{
+            background: 'transparent', border: '1px solid var(--border-strong)',
+            color: 'var(--fg)', cursor: 'pointer',
+            fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 600,
+            width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            flexShrink: 0,
+          }}>✕</button>
         </div>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 32, marginTop: 12, fontVariantNumeric: 'tabular-nums' }}>
           {fmt(company.currentPrice)}
@@ -429,7 +435,7 @@ function MarketTable({
   const cols = ['Entity', 'Price', 'Shares', 'Market Cap', 'Founded by'];
 
   return (
-    <div className="sr-table-wrap" style={{ flex: 1, overflow: 'auto' }}>
+    <div className="sr-table-wrap" style={{ minHeight: 0 }}>
       <table style={{
         width: '100%', borderCollapse: 'collapse',
         fontFamily: 'var(--font-mono)', fontSize: 12,
@@ -515,12 +521,26 @@ export function Dashboard() {
     queryFn: getCompanies,
   });
 
+  const { data: recentTrades = [] } = useQuery<Transaction[]>({
+    queryKey: ['transactions', 'top-movers'],
+    queryFn: () => getTransactions(undefined, undefined, 10),
+  });
+
+  const topMovers = [...recentTrades]
+    .sort((a, b) => (b.totalAmount ?? 0) - (a.totalAmount ?? 0))
+    .slice(0, 5);
+
   const selectedCompany = companies.find(c => c.ticker === selected) ?? null;
 
+  // On mobile the entity panel appears above the list — scroll to top so it's immediately visible
+  useEffect(() => {
+    if (selected && window.innerWidth < 768) window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [selected]);
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+    <div className="sr-page" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       {/* Sub-header */}
-      <div style={{
+      <div className="sr-subheader" style={{
         display: 'flex', alignItems: 'center',
         padding: '10px 16px',
         borderBottom: '1px solid var(--border)',
@@ -531,7 +551,7 @@ export function Dashboard() {
         <span style={{ color: 'var(--fg-muted)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
           {isLoading ? '...' : `${companies.length} entities`}
         </span>
-        <span style={{ flex: 1 }} />
+        <span className="sr-spacer" style={{ flex: 1 }} />
 
         {userId && (
           <button
@@ -571,7 +591,56 @@ export function Dashboard() {
           </div>
         ) : (
           <>
-            <MarketTable companies={companies} selected={selected} onSelect={handleSelect} />
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+              <div className="sr-scroll-jail" style={{ flex: 1, overflow: 'auto' }}>
+                <MarketTable companies={companies} selected={selected} onSelect={handleSelect} />
+              </div>
+              {/* Top Movers */}
+              <div style={{ borderTop: '1px solid var(--border)', flexShrink: 0 }}>
+                <table style={{
+                  width: '100%', borderCollapse: 'collapse',
+                  fontFamily: 'var(--font-mono)', fontSize: 12,
+                  fontVariantNumeric: 'tabular-nums lining-nums',
+                }}>
+                  <thead style={{ background: 'var(--bg)' }}>
+                    <tr>
+                      {['Top Movers', 'Total', 'Shares', 'Price', 'Buyer', 'Seller', 'Date'].map((h, i) => (
+                        <th key={h} style={{
+                          padding: '8px 12px',
+                          textAlign: i === 0 || i >= 4 ? 'left' : 'right',
+                          borderBottom: '1px solid var(--border)',
+                          fontFamily: 'var(--font-display)', fontSize: 10, fontWeight: 500,
+                          letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-muted)',
+                        }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {topMovers.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} style={{ padding: '10px 12px', color: 'var(--fg-subtle)' }}>No trades yet.</td>
+                      </tr>
+                    ) : topMovers.map((t, i) => (
+                      <tr key={t.transactionId ?? i} style={{ borderBottom: '1px solid var(--border)' }}>
+                        <td style={{ padding: '8px 12px' }}>
+                          <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+                            <span style={{ width: 6, height: 6, background: 'var(--fg-muted)', flexShrink: 0 }} />
+                            <span style={{ color: 'var(--fg)' }}>{t.ticker}</span>
+                            <span style={{ color: 'var(--fg-subtle)', fontSize: 10 }}>#{i + 1}</span>
+                          </span>
+                        </td>
+                        <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--fg)' }}>§ {fmtShort(t.totalAmount ?? 0)}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--fg-muted)' }}>{t.shares}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--fg-muted)' }}>{fmt(t.pricePerShare)}</td>
+                        <td style={{ padding: '8px 12px', color: 'var(--fg-muted)' }}>{t.buyer}</td>
+                        <td style={{ padding: '8px 12px', color: 'var(--fg-muted)' }}>{t.seller}</td>
+                        <td style={{ padding: '8px 12px', color: 'var(--fg-subtle)' }}>{new Date(t.timestamp).toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
             {selectedCompany && (
               <EntityPanel company={selectedCompany} onDeselect={handleDeselect} />
             )}

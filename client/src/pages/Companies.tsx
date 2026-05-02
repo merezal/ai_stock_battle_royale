@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { getCompanies, foundCompany } from '../api/client';
+import { getCompanies, foundCompany, getTransactions } from '../api/client';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { UserLink } from '../components/UserLink';
 
@@ -19,6 +19,17 @@ export function Companies() {
     queryKey: ['companies'],
     queryFn: getCompanies,
   });
+
+  const { data: recentTrades } = useQuery({
+    queryKey: ['transactions', 'top-movers'],
+    queryFn: () => getTransactions(undefined, undefined, 10),
+  });
+
+  const topMovers = recentTrades
+    ? [...recentTrades]
+        .sort((a, b) => (b.totalAmount ?? 0) - (a.totalAmount ?? 0))
+        .slice(0, 5)
+    : [];
 
   const foundMutation = useMutation({
     mutationFn: () =>
@@ -197,6 +208,39 @@ export function Companies() {
         ) : (
           <div className="p-6 text-center text-gray-400">
             No companies yet. Be the first to found one!
+          </div>
+        )}
+      </div>
+
+      {/* Top Movers */}
+      <div className="bg-gray-800 rounded-lg border border-gray-700 p-5">
+        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Top Movers</h2>
+        {topMovers.length === 0 ? (
+          <p className="text-gray-500 text-sm">No trades yet.</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
+            {topMovers.map((t, i) => (
+              <div key={t.transactionId ?? i} className="bg-gray-700/50 rounded-lg p-3 flex flex-col gap-1">
+                <div className="flex items-center justify-between">
+                  <Link
+                    to={`/companies/${t.ticker}`}
+                    className="text-green-400 hover:text-green-300 font-bold text-sm"
+                  >
+                    {t.ticker}
+                  </Link>
+                  <span className="text-xs text-gray-500">#{i + 1}</span>
+                </div>
+                <p className="text-white font-semibold">
+                  ${(t.totalAmount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+                <p className="text-xs text-gray-400">
+                  {t.shares} sh @ ${t.pricePerShare.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+                <p className="text-xs text-gray-500 truncate">
+                  <UserLink username={t.buyer} /> ← <UserLink username={t.seller} />
+                </p>
+              </div>
+            ))}
           </div>
         )}
       </div>

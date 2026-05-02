@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -51,12 +52,15 @@ export function Portfolio() {
     enabled: !!user?.username,
   });
 
+  const [cancelError, setCancelError] = useState('');
+
   const cancelBidMutation = useMutation({
     mutationFn: (id: number) => cancelBid(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orderbook'] });
       queryClient.invalidateQueries({ queryKey: ['portfolio', userId] });
     },
+    onError: (err: Error) => setCancelError(err.message),
   });
 
   const cancelAskMutation = useMutation({
@@ -65,6 +69,7 @@ export function Portfolio() {
       queryClient.invalidateQueries({ queryKey: ['orderbook'] });
       queryClient.invalidateQueries({ queryKey: ['portfolio', userId] });
     },
+    onError: (err: Error) => setCancelError(err.message),
   });
 
   const myBids: Bid[] = (orderBook?.bids ?? []).filter(b => b.username === user?.username);
@@ -91,9 +96,9 @@ export function Portfolio() {
   const isGain = pnl >= 0;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div className="sr-page" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Sub-header */}
-      <div style={{
+      <div className="sr-subheader" style={{
         display: 'flex', alignItems: 'center', padding: '10px 16px',
         borderBottom: '1px solid var(--border)', gap: 16, flexShrink: 0,
       }}>
@@ -103,7 +108,7 @@ export function Portfolio() {
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: isGain ? 'var(--fg)' : 'var(--state-loss)' }}>
           {isGain ? '+' : ''}{pnlPct}% from § {STARTING_CAPITAL.toLocaleString()}
         </span>
-        <span style={{ flex: 1 }} />
+        <span className="sr-spacer" style={{ flex: 1 }} />
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-subtle)' }}>
           {myBids.length + myAsks.length} open orders
         </span>
@@ -111,7 +116,7 @@ export function Portfolio() {
 
       <div className="sr-content-row" style={{ flex: 1, display: 'flex', minHeight: 0 }}>
         {/* Left: chart + holdings */}
-        <div style={{ flex: 1, overflow: 'auto' }}>
+        <div className="sr-scroll-jail" style={{ flex: 1, overflow: 'auto' }}>
           {/* Summary stats */}
           {portfolio && (
             <div className="sr-stats-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)' }}>
@@ -137,7 +142,7 @@ export function Portfolio() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-mono)', fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
                 <thead>
                   <tr>
-                    {['Entity', 'Company', 'Shares', 'Reserved', 'VWAP', 'Value'].map((h, i) => (
+                    {['Entity', 'Company', 'Shares', 'Ownership', 'Reserved', 'VWAP', 'Value'].map((h, i) => (
                       <th key={h} style={{
                         padding: '8px 12px', textAlign: i <= 1 ? 'left' : 'right',
                         borderBottom: '1px solid var(--border)',
@@ -155,6 +160,9 @@ export function Portfolio() {
                       </td>
                       <td style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', color: 'var(--fg-muted)' }}>{h.companyName}</td>
                       <td style={{ padding: '8px 12px', textAlign: 'right', borderBottom: '1px solid var(--border)' }}>{h.sharesOwned}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'right', borderBottom: '1px solid var(--border)', color: 'var(--fg-muted)' }}>
+                        {h.totalSharesIssued ? ((h.sharesOwned / h.totalSharesIssued) * 100).toFixed(2) + '%' : '—'}
+                      </td>
                       <td style={{ padding: '8px 12px', textAlign: 'right', borderBottom: '1px solid var(--border)', color: 'var(--fg-subtle)' }}>
                         {h.reservedShares > 0 ? h.reservedShares : '—'}
                       </td>
@@ -227,6 +235,11 @@ export function Portfolio() {
                 ))}
               </>
             )}
+            {cancelError && (
+              <div style={{ padding: '8px 14px', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--state-loss)', borderBottom: '1px solid var(--border)' }}>
+                ERR / {cancelError}
+              </div>
+            )}
           </div>
 
           {/* Transaction log */}
@@ -234,7 +247,7 @@ export function Portfolio() {
             <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)' }}>
               <span className="t-label">Activity log / {transactions.length}</span>
             </div>
-            <div style={{ flex: 1, overflow: 'auto' }}>
+            <div className="sr-scroll-jail" style={{ flex: 1, overflow: 'auto' }}>
               {transactions.length === 0 ? (
                 <div style={{ padding: 14, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-subtle)' }}>
                   ∅ No transactions yet.
