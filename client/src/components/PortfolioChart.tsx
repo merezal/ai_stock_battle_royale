@@ -47,8 +47,11 @@ export function PortfolioChart({ history }: PortfolioChartProps) {
   const isGain = pnl >= 0;
   const lineColor = isGain ? FG : LOSS;
 
-  const minV = Math.min(...chartData.map(d => d.value)) * 0.97;
-  const maxV = Math.max(...chartData.map(d => d.value)) * 1.03;
+  const dataMin = Math.min(...chartData.map(d => d.value));
+  const dataMax = Math.max(...chartData.map(d => d.value));
+  const dataPad = Math.max((dataMax - dataMin) * 0.15, dataMax * 0.005);
+  const minV = dataMin - dataPad;
+  const maxV = dataMax + dataPad;
 
   return (
     <div>
@@ -88,7 +91,7 @@ export function PortfolioChart({ history }: PortfolioChartProps) {
             />
             <YAxis
               domain={[minV, maxV]}
-              tickFormatter={v => `${((v as number) / 1000).toFixed(0)}K`}
+              tickFormatter={v => `${((v as number) / 1000).toFixed(1)}K`}
               stroke={SUBTLE}
               tick={{ fill: MUTED, fontFamily: 'monospace', fontSize: 10 }}
               axisLine={false}

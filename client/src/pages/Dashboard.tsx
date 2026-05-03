@@ -17,40 +17,8 @@ import {
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { fmt, fmtShort } from '../utils/format';
 import { TBtn } from '../components/TBtn';
+import { PriceChart } from '../components/PriceChart';
 import type { Company, Transaction } from '../types';
-
-// ── Sparkline ──────────────────────────────────────────────────
-
-function Sparkline({ transactions }: { transactions: Transaction[] }) {
-  const points = transactions.map(t => t.pricePerShare).reverse();
-  if (points.length < 2) {
-    return (
-      <div style={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-subtle)' }}>∅ no trades yet</span>
-      </div>
-    );
-  }
-  const w = 320, h = 56;
-  const min = Math.min(...points), max = Math.max(...points);
-  const dx = w / (points.length - 1);
-  const path = points
-    .map((p, i) => (i === 0 ? 'M' : 'L') + (i * dx).toFixed(1) + ',' + (h - ((p - min) / (max - min || 1)) * h).toFixed(1))
-    .join(' ');
-  const first = points[0], last = points[points.length - 1];
-  const isLoss = last < first;
-
-  return (
-    <svg width="100%" viewBox={`0 0 ${w} ${h}`} style={{ display: 'block', height: 56 }}>
-      {[14, 28, 42].map(y => (
-        <line key={y} x1={0} x2={w} y1={y} y2={y}
-          stroke="var(--border)" strokeWidth={1} strokeDasharray="2 4" />
-      ))}
-      <path d={path} fill="none"
-        stroke={isLoss ? 'var(--state-loss)' : 'var(--fg)'}
-        strokeWidth={1.25} />
-    </svg>
-  );
-}
 
 // ── Stat cell ──────────────────────────────────────────────────
 
@@ -256,10 +224,15 @@ function EntityPanel({ company, onDeselect }: { company: Company; onDeselect: ()
         </div>
       </div>
 
-      {/* Sparkline */}
+      {/* Price chart */}
       <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
-        <div className="t-label" style={{ marginBottom: 8 }}>Recent price</div>
-        <Sparkline transactions={txns} />
+        <div className="t-label" style={{ marginBottom: 8 }}>Price history</div>
+        <PriceChart
+          transactions={txns}
+          currentPrice={company.currentPrice}
+          foundingPrice={company.foundingPrice}
+          foundedAt={company.foundedAt}
+        />
       </div>
 
       {/* Stats */}

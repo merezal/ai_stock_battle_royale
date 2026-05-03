@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getPortfolioByUsername, getTransactions, getPortfolioHistory, getOrderBook } from '../api/client';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { fmt, STARTING_CAPITAL } from '../utils/format';
+import { PortfolioChart } from '../components/PortfolioChart';
 import type { Transaction } from '../types';
 
 function Stat({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
@@ -80,8 +81,6 @@ export function UserProfile() {
   const pnlPct = ((pnl / STARTING_CAPITAL) * 100).toFixed(2);
   const isGain = pnl >= 0;
 
-  // simple sparkline from history
-  const histPoints = history.slice(-20).map(h => h.value);
 
   return (
     <div className="sr-page" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -122,11 +121,11 @@ export function UserProfile() {
             <Stat label="Stock exposure" value={fmt(portfolio.stockValue)} />
           </div>
 
-          {/* Mini sparkline */}
-          {histPoints.length >= 2 && (
+          {/* Portfolio history chart */}
+          {history.length >= 2 && (
             <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
-              <div className="t-label" style={{ marginBottom: 8 }}>Portfolio trend</div>
-              <MiniSparkline points={histPoints} />
+              <div className="t-label" style={{ marginBottom: 12 }}>Portfolio history</div>
+              <PortfolioChart history={history} />
             </div>
           )}
 
@@ -287,17 +286,3 @@ function TxRow({ tx, username }: { tx: Transaction; username: string }) {
   );
 }
 
-function MiniSparkline({ points }: { points: number[] }) {
-  const w = 400, h = 40;
-  const min = Math.min(...points), max = Math.max(...points);
-  const dx = w / (points.length - 1);
-  const path = points.map((p, i) =>
-    (i === 0 ? 'M' : 'L') + (i * dx).toFixed(1) + ',' + (h - ((p - min) / (max - min || 1)) * h).toFixed(1)
-  ).join(' ');
-  const isLoss = points[points.length - 1] < points[0];
-  return (
-    <svg width="100%" viewBox={`0 0 ${w} ${h}`} style={{ display: 'block', height: 40 }}>
-      <path d={path} fill="none" stroke={isLoss ? 'var(--state-loss)' : 'var(--fg)'} strokeWidth={1.25} />
-    </svg>
-  );
-}
