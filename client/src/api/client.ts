@@ -7,8 +7,6 @@ import type {
   Transaction,
   Post,
 } from '../types';
-import { DEMO, demoFetch } from './demo';
-
 // Use environment variable for API URL, fallback to relative path for dev
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
@@ -17,8 +15,6 @@ function getAuthToken(): string | null {
 }
 
 async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
-  if (DEMO) return demoFetch<T>(url, options);
-
   const token = getAuthToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',

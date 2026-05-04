@@ -1,7 +1,7 @@
 node_modules/
 dist/
+demo-dist/
 .env
-client/src/api/demo-data.json
 *.log
 .DS_Store
 postgres_docker/docker_volume/
@@ -9,4 +9,3 @@ TODO.txt
 CLAUDE.md
 .claude
 postgres_docker
-client/src/api/demo-data.json

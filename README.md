@@ -137,23 +137,17 @@ Full deployment documentation:
 
 ## Demo
 
-A static frontend demo (no backend required) is available on the [`demo` branch](../../tree/demo). It runs against a snapshot of market data baked into the bundle at build time.
+A self-contained demo mode runs a scripted mock backend (no database or Ollama required). Set `COMPOSE_PROFILES=demo` in your `.env` and run the normal compose command:
 
 ```bash
-git checkout demo
-docker compose -f docker-compose.demo.yml up -d --build
-# → http://localhost:8080
+# In .env:
+COMPOSE_PROFILES=demo
+
+docker compose up -d --build
+# → http://localhost:3000
 ```
 
-To build against a live snapshot:
-
-```bash
-# Generate snapshot from running stack
-node scripts/snapshot-demo.js > client/src/api/demo-data.json
-
-# Build with real data
-docker compose -f docker-compose.demo.yml up -d --build
-```
+The demo backend auto-authenticates any login as an admin "demo" user and runs a 30-second scripted WebSocket loop that exercises every UI animation.
 
 ---
 
@@ -182,14 +176,15 @@ docker compose -f docker-compose.demo.yml up -d --build
 ├── client/src/
 │   ├── pages/                 Dashboard, Bot, Admin, Leaderboard, …
 │   ├── api/
-│   │   ├── client.ts          All API functions
-│   │   └── demo.ts            Demo-mode mock (tree-shaken in prod)
+│   │   └── client.ts          All API functions
 │   └── context/
 │       └── SocketContext.tsx  WebSocket event → React Query invalidation
+├── demo/
+│   └── server.ts              Standalone demo backend (Express + Socket.io)
 ├── prisma/
 │   └── schema.prisma          11-model schema
-├── docker-compose.yml         Production stack (db + backend + client)
-├── docker-compose.demo.yml    Static demo (nginx only)
+├── docker-compose.yml         Full stack (COMPOSE_PROFILES=prod) or demo (COMPOSE_PROFILES=demo)
+├── Dockerfile.demo            Single-container demo build
 └── .env.example               Environment variable template
 ```
 
