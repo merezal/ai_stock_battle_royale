@@ -298,7 +298,7 @@ export interface BotStatus {
 }
 
 export async function getBotStatus(): Promise<BotStatus> {
-  return fetchJSON(`${API_BASE}/bot/admin/status`);
+  return fetchJSON(`${API_BASE}/bot/status`);
 }
 
 // Admin

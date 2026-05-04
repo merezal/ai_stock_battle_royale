@@ -13,6 +13,7 @@ import { useCurrentUser } from '../hooks/useCurrentUser';
 import { PortfolioChart } from '../components/PortfolioChart';
 import { fmt, STARTING_CAPITAL } from '../utils/format';
 import { TBtn } from '../components/TBtn';
+import { FlashNew, useNewIds } from '../components/WsAnimations';
 import type { Transaction, Bid, Ask } from '../types';
 
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
@@ -74,6 +75,9 @@ export function Portfolio() {
 
   const myBids: Bid[] = (orderBook?.bids ?? []).filter(b => b.username === user?.username);
   const myAsks: Ask[] = (orderBook?.asks ?? []).filter(a => a.username === user?.username);
+
+  const newBidIds = useNewIds(myBids.map(b => b.bidId));
+  const newAskIds = useNewIds(myAsks.map(a => a.askId));
 
   if (!userId || !user) {
     return (
@@ -197,42 +201,60 @@ export function Portfolio() {
               </div>
             ) : (
               <>
-                {myBids.map(bid => (
-                  <div key={bid.bidId} style={{
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    padding: '8px 14px', borderBottom: '1px solid var(--border)',
-                    fontFamily: 'var(--font-mono)', fontSize: 11,
-                  }}>
-                    <div>
-                      <span style={{ fontFamily: 'var(--font-display)', fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg)' }}>▲ Bid</span>
-                      <span style={{ marginLeft: 8 }}>
-                        <Link to={`/?entity=${bid.ticker}`} style={{ color: 'var(--fg)', textDecoration: 'none' }}>{bid.ticker}</Link>
-                      </span>
-                      <span style={{ color: 'var(--fg-muted)', marginLeft: 6 }}>× {bid.shares} @ {fmt(bid.pricePerShare)}</span>
+                {myBids.map(bid => {
+                  const isNew = newBidIds.has(bid.bidId);
+                  return (
+                    <div key={bid.bidId} style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      padding: '8px 14px', borderBottom: '1px solid var(--border)',
+                      fontFamily: 'var(--font-mono)', fontSize: 11,
+                    }}>
+                      <div>
+                        <span style={{ fontFamily: 'var(--font-display)', fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg)' }}>
+                          {isNew ? <FlashNew>▲ Bid</FlashNew> : '▲ Bid'}
+                        </span>
+                        <span style={{ marginLeft: 8 }}>
+                          <Link to={`/?entity=${bid.ticker}`} style={{ color: 'var(--fg)', textDecoration: 'none' }}>
+                            {isNew ? <FlashNew>{bid.ticker}</FlashNew> : bid.ticker}
+                          </Link>
+                        </span>
+                        <span style={{ color: 'var(--fg-muted)', marginLeft: 6 }}>
+                          {isNew ? <FlashNew>× {bid.shares} @ {fmt(bid.pricePerShare)}</FlashNew> : `× ${bid.shares} @ ${fmt(bid.pricePerShare)}`}
+                        </span>
+                      </div>
+                      <TBtn size="sm" onClick={() => cancelBidMutation.mutate(bid.bidId)} disabled={cancelBidMutation.isPending}>
+                        Cancel
+                      </TBtn>
                     </div>
-                    <TBtn size="sm" onClick={() => cancelBidMutation.mutate(bid.bidId)} disabled={cancelBidMutation.isPending}>
-                      Cancel
-                    </TBtn>
-                  </div>
-                ))}
-                {myAsks.map(ask => (
-                  <div key={ask.askId} style={{
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    padding: '8px 14px', borderBottom: '1px solid var(--border)',
-                    fontFamily: 'var(--font-mono)', fontSize: 11,
-                  }}>
-                    <div>
-                      <span style={{ fontFamily: 'var(--font-display)', fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--state-loss)' }}>▼ Ask</span>
-                      <span style={{ marginLeft: 8 }}>
-                        <Link to={`/?entity=${ask.ticker}`} style={{ color: 'var(--fg)', textDecoration: 'none' }}>{ask.ticker}</Link>
-                      </span>
-                      <span style={{ color: 'var(--fg-muted)', marginLeft: 6 }}>× {ask.shares} @ {fmt(ask.pricePerShare)}</span>
+                  );
+                })}
+                {myAsks.map(ask => {
+                  const isNew = newAskIds.has(ask.askId);
+                  return (
+                    <div key={ask.askId} style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      padding: '8px 14px', borderBottom: '1px solid var(--border)',
+                      fontFamily: 'var(--font-mono)', fontSize: 11,
+                    }}>
+                      <div>
+                        <span style={{ fontFamily: 'var(--font-display)', fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--state-loss)' }}>
+                          {isNew ? <FlashNew>▼ Ask</FlashNew> : '▼ Ask'}
+                        </span>
+                        <span style={{ marginLeft: 8 }}>
+                          <Link to={`/?entity=${ask.ticker}`} style={{ color: 'var(--fg)', textDecoration: 'none' }}>
+                            {isNew ? <FlashNew>{ask.ticker}</FlashNew> : ask.ticker}
+                          </Link>
+                        </span>
+                        <span style={{ color: 'var(--fg-muted)', marginLeft: 6 }}>
+                          {isNew ? <FlashNew>× {ask.shares} @ {fmt(ask.pricePerShare)}</FlashNew> : `× ${ask.shares} @ ${fmt(ask.pricePerShare)}`}
+                        </span>
+                      </div>
+                      <TBtn size="sm" onClick={() => cancelAskMutation.mutate(ask.askId)} disabled={cancelAskMutation.isPending}>
+                        Cancel
+                      </TBtn>
                     </div>
-                    <TBtn size="sm" onClick={() => cancelAskMutation.mutate(ask.askId)} disabled={cancelAskMutation.isPending}>
-                      Cancel
-                    </TBtn>
-                  </div>
-                ))}
+                  );
+                })}
               </>
             )}
             {cancelError && (
