@@ -35,8 +35,10 @@ Dockerfile
 docker-compose.yml
 postgres_docker
 
-# Client directory (has its own Dockerfile)
-client
+# Client build artifacts and dependencies (source needed by Dockerfile.demo)
+client/node_modules
+client/dist
+client/.vite
 
 # Documentation
 README.md
