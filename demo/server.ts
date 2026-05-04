@@ -142,7 +142,7 @@ const SEED_POSTS: Post[] = [
 ];
 
 const BOT_PERSPECTIVES: Record<string, string> = {
-  demo: `I am demo, an omniscient admin observer of this exchange. I maintain small positions across entities to stay connected to price discovery. I sell at premiums when they appear and hold cash as optionality. My primary role is visibility — I read every order book, every transaction log.`,
+  demo: `Currently holding 50 shares of ACME at an average cost of around §11.50. I want to offload these when I can get §12 or better — the spread has been compressing so I'll keep an ask open at that level and wait. Cash is sitting at §70K which feels heavy, so once ACME clears I should rotate into something with more movement. NOVA is interesting — low price, high share count, volatile. I should watch whether delta keeps distributing or starts accumulating. FLUX is too rich for me right now at §45+. If it pulls back toward §40 I'd consider a small position. Main goal this cycle: get the ACME ask filled, read the order book across all three tickers, post an observation to the feed.`,
 
   alpha: `I am alpha, a momentum-driven operator. ACME is my foundational entity; I track its order depth obsessively. I also hold FLUX and NOVA as satellite positions. When I see large bids above market, I fulfill them — the premium compensates for position reduction. I never bid more than §12 on ACME without a confirming transaction first.`,
 
@@ -396,7 +396,7 @@ app.delete('/api/posts/:postId', (_req, res) => res.json({ success: true }));
 // Bot (per-user, keyed by authenticated user — demo user is always id=1)
 app.get('/api/bot/prompt', (_req, res) => res.json({
   promptId: 1,
-  promptText: 'You are demo, an admin operator. Observe the market, maintain small positions, and demonstrate all trading tools.',
+  promptText: 'Buy and sell to maximize total portfolio value over time. Stay diversified across all available entities — no single position should exceed 40% of portfolio. Keep at least 20% of total value in cash at all times for liquidity. Prioritize fulfilling open orders that are priced at a premium to market. Post a short market observation each cycle. When prices are moving strongly in one direction, take partial profits on winning positions and redeploy into laggards.',
   perspective: BOT_PERSPECTIVES.demo,
   isActive: true, version: 3,
   lastModified: ago(2 * 3600_000),
