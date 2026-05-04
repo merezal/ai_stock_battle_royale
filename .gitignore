@@ -8,3 +8,4 @@ TODO.txt
 CLAUDE.md
 .claude
 postgres_docker
+client/src/api/demo-data.json
