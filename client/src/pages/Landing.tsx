@@ -1,21 +1,43 @@
-import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { getCompanies } from '../api/client';
+import { getCompanies, loginUser } from '../api/client';
 import { fmt } from '../utils/format';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 import type { Company } from '../types';
+
+// ── Auto-enter hook ────────────────────────────────────────────
+// Attempts a silent login with empty credentials.
+// Demo backend accepts anything → auto-auths. Prod rejects → falls back to /login.
+
+function useAutoEnter() {
+  const navigate = useNavigate();
+  const { setUserId } = useCurrentUser();
+  return useCallback(async () => {
+    try {
+      const data = await loginUser('', '');
+      localStorage.setItem('token', data.token);
+      setUserId(data.id);
+      navigate('/');
+    } catch {
+      navigate('/login');
+    }
+  }, [navigate, setUserId]);
+}
 
 // ── Shared primitives ──────────────────────────────────────────
 
 function Btn({
   to,
   href,
+  onClick,
   variant = 'primary',
   size = 'md',
   children,
 }: {
   to?: string;
   href?: string;
+  onClick?: () => void;
   variant?: 'primary' | 'ghost' | 'invert';
   size?: 'md' | 'lg';
   children: React.ReactNode;
@@ -34,12 +56,13 @@ function Btn({
     fontFamily: 'var(--font-display)', fontWeight: 500,
     letterSpacing: '0.08em', textTransform: 'uppercase',
     border: '1px solid', textDecoration: 'none',
-    cursor: 'pointer',
+    cursor: 'pointer', background: 'none',
     transition: 'opacity var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out)',
     borderRadius: 0,
     ...sizes[size], ...variants[variant],
   };
   const cls = `sr-cta-${variant}`;
+  if (onClick) return <button type="button" onClick={onClick} className={cls} style={base}>{children}</button>;
   if (to) return <Link to={to} className={cls} style={base}>{children}</Link>;
   return <a href={href ?? '#'} className={cls} style={base}>{children}</a>;
 }
@@ -79,6 +102,7 @@ function Section({
 
 function Header() {
   const [scrolled, setScrolled] = useState(false);
+  const handleEnter = useAutoEnter();
 
   useEffect(() => {
     const handler = () => setScrolled(window.scrollY > 80);
@@ -112,7 +136,7 @@ function Header() {
           ))}
         </nav>
         <span style={{ flex: 1 }} />
-        <Btn to="/login" variant="ghost" size="md">Enter →</Btn>
+        <Btn onClick={handleEnter} variant="ghost" size="md">Enter →</Btn>
       </div>
     </header>
   );
@@ -121,6 +145,7 @@ function Header() {
 // ── Hero ───────────────────────────────────────────────────────
 
 function Hero() {
+  const handleEnter = useAutoEnter();
   return (
     <section
       data-theme="dark"
@@ -174,7 +199,7 @@ function Hero() {
             STOCK ROYALE is a synthetic stock exchange. Operators found entities, distribute shares, and write the prompts that drive autonomous trading agents. The market that emerges is yours.
           </p>
           <div className="sr-hero-ctas" style={{ display: 'flex', gap: 12 }}>
-            <Btn to="/login" size="lg">Enter →</Btn>
+            <Btn onClick={handleEnter} size="lg">Enter →</Btn>
             <Btn href="#manifesto" size="lg" variant="ghost">Read manifesto</Btn>
           </div>
         </div>
@@ -313,6 +338,7 @@ function EntityTicker({ companies }: { companies: Company[] }) {
 // ── CTA ────────────────────────────────────────────────────────
 
 function CTA() {
+  const handleEnter = useAutoEnter();
   return (
     <section style={{ background: 'var(--bg)', color: 'var(--fg)', padding: 'clamp(64px, 10vh, 160px) 24px', textAlign: 'left' }}>
       <div style={{ maxWidth: 1280, margin: '0 auto' }}>
@@ -329,7 +355,7 @@ function CTA() {
           moves the market.
         </h2>
         <div style={{ marginTop: 48, display: 'flex', gap: 12 }}>
-          <Btn to="/login" size="lg">Request operator access →</Btn>
+          <Btn onClick={handleEnter} size="lg">Request operator access →</Btn>
           <Btn href="#mechanics" size="lg" variant="ghost">Read mandate spec</Btn>
         </div>
       </div>

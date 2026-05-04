@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getAdminLogs, getAdminOrders, getBotStatus, type AdminLog, type BotStatus } from '../api/client';
 import { fmt } from '../utils/format';
+import { Decrypt, FlashNew, useNewIds } from '../components/WsAnimations';
 
 function AdminLogEntry({ log, expanded, onToggle }: { log: AdminLog; expanded: boolean; onToggle: () => void }) {
   const isThought = log.actionType === 'assistant_message';
@@ -35,7 +36,7 @@ function AdminLogEntry({ log, expanded, onToggle }: { log: AdminLog; expanded: b
             letterSpacing: '0.08em', textTransform: 'uppercase',
             color: hasError ? 'var(--state-loss)' : isSuccess === false ? 'var(--state-loss)' : isThought ? 'var(--fg-muted)' : 'var(--fg)',
           }}>
-            {isThought ? 'AI Reasoning' : log.actionType}
+            <Decrypt text={isThought ? 'AI Reasoning' : log.actionType} trigger={log.logId} />
           </span>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-subtle)', letterSpacing: '0.04em' }}>
             {log.username}
@@ -57,7 +58,7 @@ function AdminLogEntry({ log, expanded, onToggle }: { log: AdminLog; expanded: b
       {/* Thought content */}
       {isThought && displayContent && (
         <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--fg-muted)', whiteSpace: 'pre-wrap', margin: 0, lineHeight: 1.5 }}>
-          {displayContent}
+          <Decrypt text={displayContent} trigger={`${log.logId}-${expanded}`} style={{ whiteSpace: 'pre-wrap' }} />
           {!expanded && shouldTruncate && <span style={{ color: 'var(--fg-subtle)' }}>...</span>}
         </p>
       )}
@@ -132,6 +133,9 @@ export function Admin() {
   const bids = orders?.bids ?? [];
   const asks = orders?.asks ?? [];
 
+  const newBidIds = useNewIds(bids.map(b => b.bidId));
+  const newAskIds = useNewIds(asks.map(a => a.askId));
+
   return (
     <div className="sr-page" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Sub-header */}
@@ -197,15 +201,18 @@ export function Admin() {
                       </tr>
                     </thead>
                     <tbody>
-                      {bids.map(b => (
-                        <tr key={b.bidId}>
-                          <td style={{ padding: '6px 10px', borderBottom: '1px solid var(--border)', color: 'var(--fg)' }}>{b.username}</td>
-                          <td style={{ padding: '6px 10px', borderBottom: '1px solid var(--border)' }}>{b.ticker}</td>
-                          <td style={{ padding: '6px 10px', textAlign: 'right', borderBottom: '1px solid var(--border)' }}>{b.shares}</td>
-                          <td style={{ padding: '6px 10px', textAlign: 'right', borderBottom: '1px solid var(--border)', color: 'var(--fg-muted)' }}>{fmt(b.pricePerShare)}</td>
-                          <td style={{ padding: '6px 10px', textAlign: 'right', borderBottom: '1px solid var(--border)' }}>{fmt(b.totalCost)}</td>
-                        </tr>
-                      ))}
+                      {bids.map(b => {
+                        const isNew = newBidIds.has(b.bidId);
+                        return (
+                          <tr key={b.bidId}>
+                            <td style={{ padding: '6px 10px', borderBottom: '1px solid var(--border)', color: 'var(--fg)' }}>{isNew ? <FlashNew>{b.username}</FlashNew> : b.username}</td>
+                            <td style={{ padding: '6px 10px', borderBottom: '1px solid var(--border)' }}>{isNew ? <FlashNew>{b.ticker}</FlashNew> : b.ticker}</td>
+                            <td style={{ padding: '6px 10px', textAlign: 'right', borderBottom: '1px solid var(--border)' }}>{isNew ? <FlashNew>{b.shares}</FlashNew> : b.shares}</td>
+                            <td style={{ padding: '6px 10px', textAlign: 'right', borderBottom: '1px solid var(--border)', color: 'var(--fg-muted)' }}>{isNew ? <FlashNew>{fmt(b.pricePerShare)}</FlashNew> : fmt(b.pricePerShare)}</td>
+                            <td style={{ padding: '6px 10px', textAlign: 'right', borderBottom: '1px solid var(--border)' }}>{isNew ? <FlashNew>{fmt(b.totalCost)}</FlashNew> : fmt(b.totalCost)}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 )}
@@ -233,15 +240,18 @@ export function Admin() {
                       </tr>
                     </thead>
                     <tbody>
-                      {asks.map(a => (
-                        <tr key={a.askId}>
-                          <td style={{ padding: '6px 10px', borderBottom: '1px solid var(--border)', color: 'var(--fg)' }}>{a.username}</td>
-                          <td style={{ padding: '6px 10px', borderBottom: '1px solid var(--border)' }}>{a.ticker}</td>
-                          <td style={{ padding: '6px 10px', textAlign: 'right', borderBottom: '1px solid var(--border)' }}>{a.shares}</td>
-                          <td style={{ padding: '6px 10px', textAlign: 'right', borderBottom: '1px solid var(--border)', color: 'var(--fg-muted)' }}>{fmt(a.pricePerShare)}</td>
-                          <td style={{ padding: '6px 10px', textAlign: 'right', borderBottom: '1px solid var(--border)' }}>{fmt(a.totalValue)}</td>
-                        </tr>
-                      ))}
+                      {asks.map(a => {
+                        const isNew = newAskIds.has(a.askId);
+                        return (
+                          <tr key={a.askId}>
+                            <td style={{ padding: '6px 10px', borderBottom: '1px solid var(--border)', color: 'var(--fg)' }}>{isNew ? <FlashNew>{a.username}</FlashNew> : a.username}</td>
+                            <td style={{ padding: '6px 10px', borderBottom: '1px solid var(--border)' }}>{isNew ? <FlashNew>{a.ticker}</FlashNew> : a.ticker}</td>
+                            <td style={{ padding: '6px 10px', textAlign: 'right', borderBottom: '1px solid var(--border)' }}>{isNew ? <FlashNew>{a.shares}</FlashNew> : a.shares}</td>
+                            <td style={{ padding: '6px 10px', textAlign: 'right', borderBottom: '1px solid var(--border)', color: 'var(--fg-muted)' }}>{isNew ? <FlashNew>{fmt(a.pricePerShare)}</FlashNew> : fmt(a.pricePerShare)}</td>
+                            <td style={{ padding: '6px 10px', textAlign: 'right', borderBottom: '1px solid var(--border)' }}>{isNew ? <FlashNew>{fmt(a.totalValue)}</FlashNew> : fmt(a.totalValue)}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 )}

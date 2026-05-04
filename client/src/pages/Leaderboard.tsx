@@ -3,6 +3,46 @@ import { useQuery } from '@tanstack/react-query';
 import { getLeaderboard } from '../api/client';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { fmt } from '../utils/format';
+import { DigitRoll, TickFlash, useFlip } from '../components/WsAnimations';
+import type { LeaderboardEntry } from '../types';
+
+// Module-level component so React never remounts rows on parent re-render,
+// which would reset the stored FLIP position in useFlip.
+function LeaderRow({ entry, rank, userId }: { entry: LeaderboardEntry; rank: number; userId: number | null }) {
+  const ref = useFlip<HTMLTableRowElement>(rank);
+  const isMe = entry.id === userId;
+  const cell = (right = true): React.CSSProperties => ({
+    padding: '10px 12px',
+    textAlign: right ? 'right' : 'left',
+    borderBottom: '1px solid var(--border)',
+    background: isMe ? 'var(--bg-elevated)' : 'transparent',
+  });
+  return (
+    <tr ref={ref} style={{ willChange: 'transform' }}>
+      <td style={cell(false)}>
+        <span style={{ color: rank < 3 ? 'var(--fg)' : 'var(--fg-subtle)' }}>
+          {String(rank + 1).padStart(3, '0')}
+          {rank === 0 && <span style={{ marginLeft: 8, color: 'var(--fg-muted)' }}>▲</span>}
+        </span>
+      </td>
+      <td style={cell(false)}>
+        <Link to={`/users/${entry.username}`} style={{ color: isMe ? 'var(--fg-strong)' : 'var(--fg)', textDecoration: 'none' }}>
+          {entry.username}
+        </Link>
+        {isMe && <span style={{ marginLeft: 8, color: 'var(--fg-subtle)', fontSize: 10 }}>← you</span>}
+      </td>
+      <td style={cell()}>
+        <TickFlash value={entry.cashBalance}><DigitRoll value={fmt(entry.cashBalance)} /></TickFlash>
+      </td>
+      <td style={cell()}>
+        <TickFlash value={entry.stockValue}><DigitRoll value={fmt(entry.stockValue)} /></TickFlash>
+      </td>
+      <td style={{ ...cell(), color: 'var(--fg-strong)', fontWeight: 500 }}>
+        <TickFlash value={entry.totalValue}><DigitRoll value={fmt(entry.totalValue)} /></TickFlash>
+      </td>
+    </tr>
+  );
+}
 
 export function Leaderboard() {
   const { userId } = useCurrentUser();
@@ -58,34 +98,9 @@ export function Leaderboard() {
               </tr>
             </thead>
             <tbody>
-              {leaderboard.map((entry, i) => {
-                const isMe = entry.id === userId;
-                const cell = (right = true): React.CSSProperties => ({
-                  padding: '10px 12px',
-                  textAlign: right ? 'right' : 'left',
-                  borderBottom: '1px solid var(--border)',
-                  background: isMe ? 'var(--bg-elevated)' : 'transparent',
-                });
-                return (
-                  <tr key={entry.id}>
-                    <td style={cell(false)}>
-                      <span style={{ color: i < 3 ? 'var(--fg)' : 'var(--fg-subtle)' }}>
-                        {String(i + 1).padStart(3, '0')}
-                        {i === 0 && <span style={{ marginLeft: 8, color: 'var(--fg-muted)' }}>▲</span>}
-                      </span>
-                    </td>
-                    <td style={cell(false)}>
-                      <Link to={`/users/${entry.username}`} style={{ color: isMe ? 'var(--fg-strong)' : 'var(--fg)', textDecoration: 'none' }}>
-                        {entry.username}
-                      </Link>
-                      {isMe && <span style={{ marginLeft: 8, color: 'var(--fg-subtle)', fontSize: 10 }}>← you</span>}
-                    </td>
-                    <td style={cell()}>{fmt(entry.cashBalance)}</td>
-                    <td style={cell()}>{fmt(entry.stockValue)}</td>
-                    <td style={{ ...cell(), color: 'var(--fg-strong)', fontWeight: 500 }}>{fmt(entry.totalValue)}</td>
-                  </tr>
-                );
-              })}
+              {leaderboard.map((entry, i) => (
+                <LeaderRow key={entry.id} entry={entry} rank={i} userId={userId} />
+              ))}
             </tbody>
           </table>
         )}

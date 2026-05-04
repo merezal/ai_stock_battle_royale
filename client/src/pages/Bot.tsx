@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { TBtn } from '../components/TBtn';
+import { Decrypt } from '../components/WsAnimations';
 import {
   getBotPrompt,
   saveBotPrompt,
@@ -183,6 +184,8 @@ function LogEntry({ log, expanded, onToggle }: { log: BotActivityLog; expanded: 
   const hasError = (log.result as { error?: string })?.error;
   const isSuccess = (log.result as { success?: boolean })?.success;
 
+  const labelText = isThought ? 'AI reasoning' : log.actionType;
+
   return (
     <div
       onClick={isThought ? onToggle : undefined}
@@ -200,7 +203,7 @@ function LogEntry({ log, expanded, onToggle }: { log: BotActivityLog; expanded: 
             letterSpacing: '0.08em', textTransform: 'uppercase',
             color: isThought ? 'var(--fg-muted)' : hasError ? 'var(--state-loss)' : isSuccess === false ? 'var(--state-loss)' : 'var(--fg)',
           }}>
-            {isThought ? 'AI reasoning' : log.actionType}
+            <Decrypt text={labelText} trigger={log.logId} />
           </span>
           {!isThought && isSuccess === true && (
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-muted)' }}>◼ ok</span>
@@ -218,7 +221,7 @@ function LogEntry({ log, expanded, onToggle }: { log: BotActivityLog; expanded: 
 
       {isThought && displayContent && (
         <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--fg-muted)', whiteSpace: 'pre-wrap', margin: 0, lineHeight: 1.5 }}>
-          {displayContent}
+          <Decrypt text={displayContent} trigger={`${log.logId}-${expanded}`} style={{ whiteSpace: 'pre-wrap' }} />
           {!expanded && shouldTruncate && <span style={{ color: 'var(--fg-subtle)' }}>...</span>}
         </p>
       )}

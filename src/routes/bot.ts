@@ -210,7 +210,28 @@ router.post('/admin/stop-loop', authenticate, requireAdmin, async (_req: Request
   }
 });
 
-// Admin: Get loop status and execution state
+// Public (authenticated): market loop state visible to all operators
+router.get('/status', authenticate, async (_req: Request, res: Response) => {
+  try {
+    const activePrompts = await prisma.llmPrompt.count({
+      where: { isActive: true },
+    });
+
+    const executionState = getExecutionState();
+
+    return res.json({
+      loopRunning: isBotLoopRunning(),
+      activeBotsCount: activePrompts,
+      executionInterval: parseInt(process.env.BOT_EXECUTION_INTERVAL || '30000', 10),
+      ...executionState,
+    });
+  } catch (error) {
+    logger.error('Error in bot route', error);
+    return res.status(500).json({ error: 'Failed to get bot status' });
+  }
+});
+
+// Admin: Get loop status and execution state (kept for backwards compat)
 router.get('/admin/status', authenticate, requireAdmin, async (_req: Request, res: Response) => {
   try {
     const activePrompts = await prisma.llmPrompt.count({

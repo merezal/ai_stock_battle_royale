@@ -258,6 +258,30 @@ a:hover { text-decoration-color: var(--fg); }
 @keyframes sr-pulse   { 0%,100% { opacity: 1 } 50% { opacity: 0.3 } }
 @keyframes sr-tick    { from { transform: translateX(0) } to { transform: translateX(-33.333%) } }
 @keyframes sr-scroll-x { from { transform: translateX(0) } to { transform: translateX(-33.333%) } }
+@keyframes sr-hairline-reveal {
+  0%   { background-size: 0% 1px; }
+  60%  { background-size: 100% 1px; }
+  100% { background-size: 100% 1px; }
+}
+@keyframes sr-hairline-grow {
+  0%   { background-size: 0% 1px; }
+  100% { background-size: 100% 1px; }
+}
+
+/* HairlineRow: draw bottom border then fade content up */
+tr[data-sr-row-anim] td {
+  background-image: linear-gradient(90deg, var(--fg) 0%, var(--fg) 100%);
+  background-size: 0% 1px;
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+}
+tr[data-sr-row-anim="1"] td,
+tr[data-sr-row-anim="2"] td {
+  animation: sr-hairline-grow 280ms cubic-bezier(0.2,0.8,0.2,1) forwards;
+}
+tr[data-sr-row-anim="0"] td,
+tr[data-sr-row-anim="1"] td { color: transparent !important; }
+tr[data-sr-row-anim="2"] td { transition: color 320ms cubic-bezier(0.2,0.8,0.2,1); }
 
 /* ── Mobile / Responsive ──────────────────────────────────────── */
 

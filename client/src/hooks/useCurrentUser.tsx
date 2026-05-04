@@ -14,28 +14,27 @@ const CurrentUserContext = createContext<CurrentUserContextType | null>(null);
 
 export function CurrentUserProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
+
   const [userId, setUserIdState] = useState<number | null>(() => {
     const stored = localStorage.getItem('currentUserId');
     return stored ? parseInt(stored) : null;
   });
 
   const setUserId = (id: number | null) => {
-    // Clear old user data from cache when switching users
     if (userId !== null && userId !== id) {
       queryClient.removeQueries({ queryKey: ['user', userId] });
       queryClient.removeQueries({ queryKey: ['portfolio', userId] });
     }
-    // Also clear the new user's cached data to force a fresh fetch
     if (id !== null) {
       queryClient.removeQueries({ queryKey: ['user', id] });
       queryClient.removeQueries({ queryKey: ['portfolio', id] });
     }
-    setUserIdState(id);
     if (id) {
       localStorage.setItem('currentUserId', id.toString());
     } else {
       localStorage.removeItem('currentUserId');
     }
+    setUserIdState(id);
   };
 
   const { data: user, isLoading } = useQuery({

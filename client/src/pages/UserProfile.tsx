@@ -4,6 +4,7 @@ import { getPortfolioByUsername, getTransactions, getPortfolioHistory, getOrderB
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { fmt, STARTING_CAPITAL } from '../utils/format';
 import { PortfolioChart } from '../components/PortfolioChart';
+import { FlashNew, useNewIds } from '../components/WsAnimations';
 import type { Transaction } from '../types';
 
 function Stat({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
@@ -49,6 +50,9 @@ export function UserProfile() {
 
   const userBids = (orderBook?.bids ?? []).filter(b => b.username === username);
   const userAsks = (orderBook?.asks ?? []).filter(a => a.username === username);
+
+  const newBidIds = useNewIds(userBids.map(b => b.bidId));
+  const newAskIds = useNewIds(userAsks.map(a => a.askId));
 
   if (isLoading) {
     return (
@@ -203,30 +207,36 @@ export function UserProfile() {
                   </tr>
                 </thead>
                 <tbody>
-                  {userBids.map(b => (
-                    <tr key={b.bidId} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '8px 12px', fontFamily: 'var(--font-display)', fontSize: 10, fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg)' }}>▲ Bid</td>
-                      <td style={{ padding: '8px 12px' }}>
-                        <Link to={`/?entity=${b.ticker}`} style={{ color: 'var(--fg)', textDecoration: 'none' }}>{b.ticker}</Link>
-                      </td>
-                      <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--fg-muted)' }}>{b.shares}</td>
-                      <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--fg-muted)' }}>{fmt(b.pricePerShare)}</td>
-                      <td style={{ padding: '8px 12px', textAlign: 'right' }}>{fmt(b.totalCost)}</td>
-                      <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--fg-subtle)' }}>{new Date(b.createdAt).toLocaleString()}</td>
-                    </tr>
-                  ))}
-                  {userAsks.map(a => (
-                    <tr key={a.askId} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '8px 12px', fontFamily: 'var(--font-display)', fontSize: 10, fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--state-loss)' }}>▼ Ask</td>
-                      <td style={{ padding: '8px 12px' }}>
-                        <Link to={`/?entity=${a.ticker}`} style={{ color: 'var(--fg)', textDecoration: 'none' }}>{a.ticker}</Link>
-                      </td>
-                      <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--fg-muted)' }}>{a.shares}</td>
-                      <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--fg-muted)' }}>{fmt(a.pricePerShare)}</td>
-                      <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--fg-subtle)' }}>—</td>
-                      <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--fg-subtle)' }}>{new Date(a.createdAt).toLocaleString()}</td>
-                    </tr>
-                  ))}
+                  {userBids.map(b => {
+                    const isNew = newBidIds.has(b.bidId);
+                    return (
+                      <tr key={b.bidId} style={{ borderBottom: '1px solid var(--border)' }}>
+                        <td style={{ padding: '8px 12px', fontFamily: 'var(--font-display)', fontSize: 10, fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg)' }}>{isNew ? <FlashNew>▲ Bid</FlashNew> : '▲ Bid'}</td>
+                        <td style={{ padding: '8px 12px' }}>
+                          <Link to={`/?entity=${b.ticker}`} style={{ color: 'var(--fg)', textDecoration: 'none' }}>{isNew ? <FlashNew>{b.ticker}</FlashNew> : b.ticker}</Link>
+                        </td>
+                        <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--fg-muted)' }}>{isNew ? <FlashNew>{b.shares}</FlashNew> : b.shares}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--fg-muted)' }}>{isNew ? <FlashNew>{fmt(b.pricePerShare)}</FlashNew> : fmt(b.pricePerShare)}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'right' }}>{isNew ? <FlashNew>{fmt(b.totalCost)}</FlashNew> : fmt(b.totalCost)}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--fg-subtle)' }}>{isNew ? <FlashNew>{new Date(b.createdAt).toLocaleString()}</FlashNew> : new Date(b.createdAt).toLocaleString()}</td>
+                      </tr>
+                    );
+                  })}
+                  {userAsks.map(a => {
+                    const isNew = newAskIds.has(a.askId);
+                    return (
+                      <tr key={a.askId} style={{ borderBottom: '1px solid var(--border)' }}>
+                        <td style={{ padding: '8px 12px', fontFamily: 'var(--font-display)', fontSize: 10, fontWeight: 500, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--state-loss)' }}>{isNew ? <FlashNew>▼ Ask</FlashNew> : '▼ Ask'}</td>
+                        <td style={{ padding: '8px 12px' }}>
+                          <Link to={`/?entity=${a.ticker}`} style={{ color: 'var(--fg)', textDecoration: 'none' }}>{isNew ? <FlashNew>{a.ticker}</FlashNew> : a.ticker}</Link>
+                        </td>
+                        <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--fg-muted)' }}>{isNew ? <FlashNew>{a.shares}</FlashNew> : a.shares}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--fg-muted)' }}>{isNew ? <FlashNew>{fmt(a.pricePerShare)}</FlashNew> : fmt(a.pricePerShare)}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--fg-subtle)' }}>—</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--fg-subtle)' }}>{isNew ? <FlashNew>{new Date(a.createdAt).toLocaleString()}</FlashNew> : new Date(a.createdAt).toLocaleString()}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             )}

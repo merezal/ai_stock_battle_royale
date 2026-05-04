@@ -7,7 +7,6 @@ import type {
   Transaction,
   Post,
 } from '../types';
-
 // Use environment variable for API URL, fallback to relative path for dev
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
@@ -21,7 +20,6 @@ async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
     'Content-Type': 'application/json',
   };
 
-  // Add Authorization header if token exists
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
@@ -298,7 +296,7 @@ export interface BotStatus {
 }
 
 export async function getBotStatus(): Promise<BotStatus> {
-  return fetchJSON(`${API_BASE}/bot/admin/status`);
+  return fetchJSON(`${API_BASE}/bot/status`);
 }
 
 // Admin

@@ -4,6 +4,10 @@ import { useQuery } from '@tanstack/react-query';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { getCompanies, getBotStatus, getBotPrompt, getLeaderboard, type BotStatus } from '../api/client';
 import type { Company } from '../types';
+import { useAnimSettings } from '../hooks/useAnimSettings';
+import { AnimSettingsPanel } from './AnimSettingsPanel';
+import { HairlineReveal } from './WsAnimations';
+import { useSocket } from '../context/SocketContext';
 
 // ── Clock ──────────────────────────────────────────────────────
 
@@ -24,10 +28,14 @@ function TopBar({
   operator,
   isRunning,
   onLogout,
+  onGearClick,
+  gearOpen,
 }: {
   operator: string;
   isRunning: boolean;
   onLogout: () => void;
+  onGearClick: () => void;
+  gearOpen: boolean;
 }) {
   const clock = useClock();
 
@@ -71,6 +79,27 @@ function TopBar({
       </span>
 
       <span className="sr-topbar-clock t-num muted">{clock}</span>
+
+      {/* Motion settings */}
+      <button
+        onClick={onGearClick}
+        aria-label="Animation settings"
+        title="Motion settings"
+        style={{
+          width: 28, height: 28,
+          background: gearOpen ? 'var(--fg)' : 'transparent',
+          color: gearOpen ? 'var(--bg)' : 'var(--fg-muted)',
+          border: '1px solid var(--border)', borderRadius: 0,
+          cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          transition: 'background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out)',
+          flexShrink: 0,
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+        </svg>
+      </button>
 
       <button
         onClick={onLogout}
@@ -161,7 +190,7 @@ function Sidebar({
 
 // ── CommandBar ─────────────────────────────────────────────────
 
-function CommandBar({ companies }: { companies: Company[] }) {
+function CommandBar({ companies, lastEvent }: { companies: Company[]; lastEvent: string | null }) {
   const ticker = companies.length > 0
     ? companies.map(c =>
         `   ${c.ticker} § ${c.currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}   `
@@ -179,9 +208,11 @@ function CommandBar({ companies }: { companies: Company[] }) {
       overflow: 'hidden',
     }}>
       <span style={{ color: 'var(--fg)' }}>/</span>
-      <span>⌘K command</span>
-      <span style={{ color: 'var(--fg-subtle)' }}>·</span>
-      <span>? help</span>
+      <span style={{ flexShrink: 0 }}>⌘K</span>
+      <span style={{ color: 'var(--fg-subtle)', flexShrink: 0 }}>·</span>
+      <span style={{ minWidth: 180, maxWidth: 320, overflow: 'hidden', color: 'var(--fg)', flexShrink: 0 }}>
+        {lastEvent && <HairlineReveal text={lastEvent} trigger={lastEvent} />}
+      </span>
       <span style={{ flex: 1, overflow: 'hidden', whiteSpace: 'nowrap' }}>
         <span style={{ display: 'inline-block', animation: 'sr-tick 60s linear infinite' }}>
           {(ticker + ticker + ticker)}
@@ -231,6 +262,19 @@ export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, setUserId } = useCurrentUser();
+  const [animSettings, setAnimSetting, resetAnimSettings] = useAnimSettings();
+  const [animPanelOpen, setAnimPanelOpen] = useState(false);
+
+  useEffect(() => {
+    window.__SR_ANIM = {
+      ...window.__SR_ANIM,
+      ...animSettings,
+      scrambleDurMs:  animSettings.enableDecrypt   ? animSettings.scrambleDurMs  : 0,
+      digitRollDurMs: animSettings.enableDigitRoll ? animSettings.digitRollDurMs : 0,
+      flashDurMs:     animSettings.enableTickFlash ? animSettings.flashDurMs     : 0,
+      flipDurMs:      animSettings.enableFlip      ? animSettings.flipDurMs      : 0,
+    };
+  }, [animSettings]);
 
   const { data: companies = [] } = useQuery<Company[]>({
     queryKey: ['companies'],
@@ -254,6 +298,34 @@ export function Layout() {
     queryFn: getLeaderboard,
     staleTime: 30000,
   });
+
+  const [lastEvent, setLastEvent] = useState<string | null>(null);
+  const { socket } = useSocket();
+
+  useEffect(() => {
+    if (!socket) return;
+    const set = setLastEvent;
+    socket.on('companies:updated',  ()  => set('Market data updated.'));
+    socket.on('leaderboard:updated',()  => set('Leaderboard updated.'));
+    socket.on('posts:updated',      ()  => set('New post in feed.'));
+    socket.on('transactions:new',   (p: { ticker?: string }) =>
+      set(p.ticker ? `New transaction · ${p.ticker}` : 'New transaction.'));
+    socket.on('portfolio:updated',  (p: { username: string }) =>
+      set(`Portfolio updated · @${p.username}`));
+    socket.on('bot:log',            (p: { actionType: string }) =>
+      set(p.actionType === 'assistant_message' ? 'Agent reasoning...' : `Agent · ${p.actionType}`));
+    socket.on('bot:status',         (p: { loopRunning: boolean }) =>
+      set(p.loopRunning ? 'Loop started.' : 'Loop stopped.'));
+    return () => {
+      socket.off('companies:updated');
+      socket.off('leaderboard:updated');
+      socket.off('posts:updated');
+      socket.off('transactions:new');
+      socket.off('portfolio:updated');
+      socket.off('bot:log');
+      socket.off('bot:status');
+    };
+  }, [socket]);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -281,6 +353,8 @@ export function Layout() {
         operator={user?.username ?? '—'}
         isRunning={botStatus?.loopRunning ?? false}
         onLogout={handleLogout}
+        onGearClick={() => setAnimPanelOpen(o => !o)}
+        gearOpen={animPanelOpen}
       />
       <div className="sr-layout-body" style={{ flex: 1, display: 'flex', minHeight: 0 }}>
         <Sidebar
@@ -307,8 +381,15 @@ export function Layout() {
           </div>
         </main>
       </div>
-      <CommandBar companies={companies} />
+      <CommandBar companies={companies} lastEvent={lastEvent} />
       <MobileNav active={active} isAdmin={user?.isAdmin ?? false} />
+      <AnimSettingsPanel
+        open={animPanelOpen}
+        onClose={() => setAnimPanelOpen(false)}
+        settings={animSettings}
+        set={setAnimSetting}
+        reset={resetAnimSettings}
+      />
     </div>
   );
 }

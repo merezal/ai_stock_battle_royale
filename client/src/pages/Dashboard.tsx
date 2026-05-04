@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -18,6 +18,7 @@ import { useCurrentUser } from '../hooks/useCurrentUser';
 import { fmt, fmtShort } from '../utils/format';
 import { TBtn } from '../components/TBtn';
 import { PriceChart } from '../components/PriceChart';
+import { DigitRoll, TickFlash, HairlineRow, FlashNew, useNewIds } from '../components/WsAnimations';
 import type { Company, Transaction } from '../types';
 
 // ── Stat cell ──────────────────────────────────────────────────
@@ -196,6 +197,9 @@ function EntityPanel({ company, onDeselect }: { company: Company; onDeselect: ()
   const topBids = (orderBook?.bids ?? []).slice(0, 3);
   const topAsks = (orderBook?.asks ?? []).slice(0, 3);
 
+  const newBidIds = useNewIds(topBids.map(b => b.bidId));
+  const newAskIds = useNewIds(topAsks.map(a => a.askId));
+
   return (
     <aside className="sr-panel-right sr-entity-panel" style={{
       width: 380, flexShrink: 0,
@@ -257,64 +261,70 @@ function EntityPanel({ company, onDeselect }: { company: Company; onDeselect: ()
           {topBids.length > 0 && (
             <div style={{ marginBottom: 8 }}>
               <div className="t-label" style={{ marginBottom: 6, fontSize: 10 }}>Bids ▲</div>
-              {topBids.map(b => (
-                <div key={b.bidId} style={{
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  padding: '6px 0', borderBottom: '1px solid var(--border)',
-                  fontFamily: 'var(--font-mono)', fontSize: 11,
-                }}>
-                  <div>
-                    <span style={{ color: 'var(--fg)' }}>{fmt(b.pricePerShare)}</span>
-                    <span style={{ color: 'var(--fg-muted)', marginLeft: 8 }}>× {b.shares}</span>
-                    <span style={{ color: 'var(--fg-subtle)', marginLeft: 8 }}>@{b.username}</span>
+              {topBids.map(b => {
+                const isNew = newBidIds.has(b.bidId);
+                return (
+                  <div key={b.bidId} style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    padding: '6px 0', borderBottom: '1px solid var(--border)',
+                    fontFamily: 'var(--font-mono)', fontSize: 11,
+                  }}>
+                    <div>
+                      <span style={{ color: 'var(--fg)' }}>{isNew ? <FlashNew>{fmt(b.pricePerShare)}</FlashNew> : fmt(b.pricePerShare)}</span>
+                      <span style={{ color: 'var(--fg-muted)', marginLeft: 8 }}>{isNew ? <FlashNew>× {b.shares}</FlashNew> : `× ${b.shares}`}</span>
+                      <span style={{ color: 'var(--fg-subtle)', marginLeft: 8 }}>{isNew ? <FlashNew>@{b.username}</FlashNew> : `@${b.username}`}</span>
+                    </div>
+                    {b.username !== user?.username ? (
+                      <TBtn variant="ghost" size="sm"
+                        onClick={() => fulfillBidMutation.mutate(b.bidId)}
+                        disabled={fulfillBidMutation.isPending}>
+                        Sell
+                      </TBtn>
+                    ) : (
+                      <TBtn variant="minimal" size="sm"
+                        onClick={() => cancelBidMutation.mutate(b.bidId)}
+                        disabled={cancelBidMutation.isPending}>
+                        Cancel
+                      </TBtn>
+                    )}
                   </div>
-                  {b.username !== user?.username ? (
-                    <TBtn variant="ghost" size="sm"
-                      onClick={() => fulfillBidMutation.mutate(b.bidId)}
-                      disabled={fulfillBidMutation.isPending}>
-                      Sell
-                    </TBtn>
-                  ) : (
-                    <TBtn variant="minimal" size="sm"
-                      onClick={() => cancelBidMutation.mutate(b.bidId)}
-                      disabled={cancelBidMutation.isPending}>
-                      Cancel
-                    </TBtn>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
           {topAsks.length > 0 && (
             <div>
               <div className="t-label" style={{ marginBottom: 6, fontSize: 10 }}>Asks ▼</div>
-              {topAsks.map(a => (
-                <div key={a.askId} style={{
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  padding: '6px 0', borderBottom: '1px solid var(--border)',
-                  fontFamily: 'var(--font-mono)', fontSize: 11,
-                }}>
-                  <div>
-                    <span style={{ color: 'var(--state-loss)' }}>{fmt(a.pricePerShare)}</span>
-                    <span style={{ color: 'var(--fg-muted)', marginLeft: 8 }}>× {a.shares}</span>
-                    <span style={{ color: 'var(--fg-subtle)', marginLeft: 8 }}>@{a.username}</span>
+              {topAsks.map(a => {
+                const isNew = newAskIds.has(a.askId);
+                return (
+                  <div key={a.askId} style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    padding: '6px 0', borderBottom: '1px solid var(--border)',
+                    fontFamily: 'var(--font-mono)', fontSize: 11,
+                  }}>
+                    <div>
+                      <span style={{ color: 'var(--state-loss)' }}>{isNew ? <FlashNew>{fmt(a.pricePerShare)}</FlashNew> : fmt(a.pricePerShare)}</span>
+                      <span style={{ color: 'var(--fg-muted)', marginLeft: 8 }}>{isNew ? <FlashNew>× {a.shares}</FlashNew> : `× ${a.shares}`}</span>
+                      <span style={{ color: 'var(--fg-subtle)', marginLeft: 8 }}>{isNew ? <FlashNew>@{a.username}</FlashNew> : `@${a.username}`}</span>
+                    </div>
+                    {a.username !== user?.username ? (
+                      <TBtn variant="ghost" size="sm"
+                        onClick={() => fulfillAskMutation.mutate(a.askId)}
+                        disabled={fulfillAskMutation.isPending}>
+                        Buy
+                      </TBtn>
+                    ) : (
+                      <TBtn variant="minimal" size="sm"
+                        onClick={() => cancelAskMutation.mutate(a.askId)}
+                        disabled={cancelAskMutation.isPending}>
+                        Cancel
+                      </TBtn>
+                    )}
                   </div>
-                  {a.username !== user?.username ? (
-                    <TBtn variant="ghost" size="sm"
-                      onClick={() => fulfillAskMutation.mutate(a.askId)}
-                      disabled={fulfillAskMutation.isPending}>
-                      Buy
-                    </TBtn>
-                  ) : (
-                    <TBtn variant="minimal" size="sm"
-                      onClick={() => cancelAskMutation.mutate(a.askId)}
-                      disabled={cancelAskMutation.isPending}>
-                      Cancel
-                    </TBtn>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -400,10 +410,12 @@ function MarketTable({
   companies,
   selected,
   onSelect,
+  newTickers,
 }: {
   companies: Company[];
   selected: string | null;
   onSelect: (ticker: string) => void;
+  newTickers: Set<string>;
 }) {
   const cols = ['Entity', 'Price', 'Shares', 'Market Cap', 'Founded by'];
 
@@ -430,6 +442,7 @@ function MarketTable({
         <tbody>
           {companies.map(c => {
             const isSel = selected === c.ticker;
+            const isNew = newTickers.has(c.ticker);
             const totalShares = parseInt(c.totalSharesIssued);
             const marketCap = c.currentPrice * totalShares;
             const cell = (right = true): React.CSSProperties => ({
@@ -437,16 +450,9 @@ function MarketTable({
               textAlign: right ? 'right' : 'left',
               borderBottom: '1px solid var(--border)',
             });
-            return (
-              <tr
-                key={c.ticker}
-                onClick={() => onSelect(c.ticker)}
-                style={{
-                  cursor: 'pointer',
-                  background: isSel ? 'var(--bg-elevated)' : 'transparent',
-                  transition: 'background var(--dur-1) var(--ease-out)',
-                }}
-              >
+
+            const rowCells = (
+              <>
                 <td style={cell(false)}>
                   <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
                     <span style={{ width: 6, height: 6, background: 'var(--fg-muted)', flexShrink: 0 }} />
@@ -454,7 +460,14 @@ function MarketTable({
                     <span style={{ color: 'var(--fg-muted)', fontSize: 11 }}>{c.companyName}</span>
                   </span>
                 </td>
-                <td style={cell()}>{fmt(c.currentPrice)}</td>
+                <td style={cell()}>
+                  <TickFlash value={Math.round(c.currentPrice * 100)}>
+                    <DigitRoll
+                      value={c.currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      prefix="§ "
+                    />
+                  </TickFlash>
+                </td>
                 <td style={cell()}>{fmtShort(totalShares)}</td>
                 <td style={cell()}>{'§ ' + fmtShort(marketCap)}</td>
                 <td style={{ ...cell(false), color: 'var(--fg-muted)' }}>
@@ -465,6 +478,25 @@ function MarketTable({
                     </Link>
                   ) : '—'}
                 </td>
+              </>
+            );
+
+            return isNew ? (
+              // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
+              <HairlineRow key={c.ticker} style={{ cursor: 'pointer', background: isSel ? 'var(--bg-elevated)' : 'transparent' }} onClick={() => onSelect(c.ticker)}>
+                {rowCells}
+              </HairlineRow>
+            ) : (
+              <tr
+                key={c.ticker}
+                onClick={() => onSelect(c.ticker)}
+                style={{
+                  cursor: 'pointer',
+                  background: isSel ? 'var(--bg-elevated)' : 'transparent',
+                  transition: 'background var(--dur-1) var(--ease-out)',
+                }}
+              >
+                {rowCells}
               </tr>
             );
           })}
@@ -481,6 +513,8 @@ export function Dashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const selected = searchParams.get('entity');
   const [showFoundModal, setShowFoundModal] = useState(false);
+  const [newTickers, setNewTickers] = useState<Set<string>>(new Set());
+  const seenTickersRef = useRef<Set<string> | null>(null);
 
   const handleSelect = (ticker: string) => setSearchParams({ entity: ticker }, { replace: true });
   const handleDeselect = () => {
@@ -493,6 +527,23 @@ export function Dashboard() {
     queryKey: ['companies'],
     queryFn: getCompanies,
   });
+
+  useEffect(() => {
+    if (companies.length === 0) return;
+    if (seenTickersRef.current === null) {
+      // Initial load — populate seen set without animating
+      seenTickersRef.current = new Set(companies.map(c => c.ticker));
+      return;
+    }
+    const newOnes = new Set(
+      companies.filter(c => !seenTickersRef.current!.has(c.ticker)).map(c => c.ticker)
+    );
+    companies.forEach(c => seenTickersRef.current!.add(c.ticker));
+    if (newOnes.size === 0) return;
+    setNewTickers(newOnes);
+    const timer = setTimeout(() => setNewTickers(new Set()), 1200);
+    return () => clearTimeout(timer);
+  }, [companies]);
 
   const { data: recentTrades = [] } = useQuery<Transaction[]>({
     queryKey: ['transactions', 'top-movers'],
@@ -566,7 +617,7 @@ export function Dashboard() {
           <>
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
               <div className="sr-scroll-jail" style={{ flex: 1, overflow: 'auto' }}>
-                <MarketTable companies={companies} selected={selected} onSelect={handleSelect} />
+                <MarketTable companies={companies} selected={selected} onSelect={handleSelect} newTickers={newTickers} />
               </div>
               {/* Top Movers */}
               <div style={{ borderTop: '1px solid var(--border)', flexShrink: 0 }}>

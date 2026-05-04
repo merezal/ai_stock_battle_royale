@@ -1,0 +1,53 @@
+# Demo Dockerfile — single container serving both the built Vite frontend
+# and the demo Express/Socket.io backend on the same origin.
+#
+# Build: docker build -f Dockerfile.demo -t stock-royale-demo .
+# Run:   docker run -p 3000:3000 stock-royale-demo
+
+# ── Stage 1: Build Vite frontend ──────────────────────────────────────────────
+FROM node:20-alpine AS frontend-builder
+
+WORKDIR /frontend
+
+COPY client/package*.json ./
+RUN npm ci
+
+COPY client/ ./
+
+# No VITE_API_URL → frontend uses relative paths (/api) — same origin as demo server
+RUN npm run build
+
+# ── Stage 2: Build demo TypeScript server ─────────────────────────────────────
+FROM node:20-alpine AS server-builder
+
+WORKDIR /app
+
+# Demo server dependencies (express + socket.io only)
+COPY demo/package*.json ./
+RUN npm ci
+
+COPY demo/ ./demo/
+
+RUN npx tsc -p demo/tsconfig.json
+
+# ── Stage 3: Runtime ──────────────────────────────────────────────────────────
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Production deps for demo server
+COPY demo/package*.json ./
+RUN npm ci --only=production
+
+# Compiled demo server
+COPY --from=server-builder /app/demo-dist ./demo-dist
+
+# Built Vite frontend → served as static files from demo server
+COPY --from=frontend-builder /frontend/dist ./public
+
+ENV NODE_ENV=production
+ENV PORT=3000
+
+EXPOSE 3000
+
+CMD ["node", "demo-dist/server.js"]
