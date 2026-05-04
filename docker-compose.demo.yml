@@ -1,0 +1,10 @@
+services:
+  demo:
+    build:
+      context: ./client
+      dockerfile: Dockerfile.demo
+    ports:
+      - "80:80"
+    environment:
+      NODE_ENV: demo
+    restart: unless-stopped
